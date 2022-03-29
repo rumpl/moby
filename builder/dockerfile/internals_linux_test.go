@@ -35,8 +35,8 @@ othergrp:x:6666:
 			Size:        65536,
 		},
 	}
-	remapped := idtools.NewIDMappingsFromMaps(idMaps, idMaps)
-	unmapped := &idtools.IdentityMapping{}
+	remapped := idtools.IdentityMapping{UIDMaps: idMaps, GIDMaps: idMaps}
+	unmapped := idtools.IdentityMapping{}
 
 	contextDir, cleanup := createTestTempDir(t, "", "builder-chown-parse-test")
 	defer cleanup()
@@ -54,7 +54,7 @@ othergrp:x:6666:
 		builder   *Builder
 		name      string
 		chownStr  string
-		idMapping *idtools.IdentityMapping
+		idMapping idtools.IdentityMapping
 		state     *dispatchState
 		expected  idtools.Identity
 	}{
@@ -127,7 +127,7 @@ othergrp:x:6666:
 		builder   *Builder
 		name      string
 		chownStr  string
-		idMapping *idtools.IdentityMapping
+		idMapping idtools.IdentityMapping
 		state     *dispatchState
 		descr     string
 	}{

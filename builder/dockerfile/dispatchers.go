@@ -211,7 +211,7 @@ func dispatchTriggeredOnBuild(ctx context.Context, d dispatchRequest, triggers [
 		}
 		cmd, err := instructions.ParseCommand(ast.AST.Children[0])
 		if err != nil {
-			var uiErr *instructions.UnknownInstruction
+			var uiErr *instructions.UnknownInstructionError
 			if errors.As(err, &uiErr) {
 				buildsFailed.WithValues(metricsUnknownInstructionError).Inc()
 			}

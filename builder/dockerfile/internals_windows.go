@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func parseChownFlag(ctx context.Context, builder *Builder, state *dispatchState, chown, ctrRootPath string, identityMapping *idtools.IdentityMapping) (idtools.Identity, error) {
+func parseChownFlag(builder *Builder, state *dispatchState, chown, ctrRootPath string, identityMapping idtools.IdentityMapping) (idtools.Identity, error) {
 	if builder.options.Platform == "windows" {
 		return getAccountIdentity(ctx, builder, chown, ctrRootPath, state)
 	}

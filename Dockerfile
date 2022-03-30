@@ -334,6 +334,7 @@ RUN mkdir -p hack \
 ENTRYPOINT ["hack/dind-systemd"]
 
 FROM dev-systemd-${SYSTEMD} AS dev
+RUN GO111MODULE=on go install github.com/go-delve/delve/cmd/dlv@latest
 
 FROM runtime-dev AS binary-base
 ARG DOCKER_GITCOMMIT=HEAD

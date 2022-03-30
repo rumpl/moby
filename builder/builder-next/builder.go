@@ -3,6 +3,8 @@ package buildkit
 import (
 	"context"
 	"fmt"
+	"github.com/containerd/containerd"
+	"github.com/docker/distribution/reference"
 	"io"
 	"net"
 	"strconv"
@@ -16,7 +18,6 @@ import (
 	"github.com/docker/docker/api/types/backend"
 	"github.com/docker/docker/builder"
 	"github.com/docker/docker/daemon/config"
-	"github.com/docker/docker/daemon/images"
 	"github.com/docker/docker/libnetwork"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/streamformatter"
@@ -67,7 +68,7 @@ var cacheFields = map[string]bool{
 type Opt struct {
 	SessionManager      *session.Manager
 	Root                string
-	Dist                images.DistributionServices
+	Config              *config.Config
 	NetworkController   libnetwork.NetworkController
 	DefaultCgroupParent string
 	RegistryHosts       docker.RegistryHosts
@@ -76,6 +77,7 @@ type Opt struct {
 	IdentityMapping     idtools.IdentityMapping
 	DNSConfig           config.DNSConfig
 	ApparmorProfile     string
+	ContainerdCli       *containerd.Client
 }
 
 // Builder can build using BuildKit backend
@@ -327,24 +329,28 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 		frontendAttrs["ulimit"] = ulimits
 	}
 
-	exporterName := ""
-	exporterAttrs := map[string]string{}
+	reposAndTags, err := sanitizeRepoAndTags(opt.Options.Tags)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, tag := range reposAndTags {
+		names = append(names, tag.String())
+	}
+
+	exporterName := client.ExporterImage
+	exporterAttrs := map[string]string{
+		"image.name": strings.Join(names, ","),
+		"name":       strings.Join(names, ","),
+	}
 
 	if len(opt.Options.Outputs) > 1 {
 		return nil, errors.Errorf("multiple outputs not supported")
-	} else if len(opt.Options.Outputs) == 0 {
-		exporterName = "moby"
-	} else {
+	} else if len(opt.Options.Outputs) == 1 {
 		// cacheonly is a special type for triggering skipping all exporters
 		if opt.Options.Outputs[0].Type != "cacheonly" {
 			exporterName = opt.Options.Outputs[0].Type
 			exporterAttrs = opt.Options.Outputs[0].Attrs
-		}
-	}
-
-	if exporterName == "moby" {
-		if len(opt.Options.Tags) > 0 {
-			exporterAttrs["name"] = strings.Join(opt.Options.Tags, ",")
 		}
 	}
 
@@ -629,4 +635,39 @@ func toBuildkitPruneInfo(opts types.BuildCachePruneOptions) (client.PruneInfo, e
 		KeepBytes:    opts.KeepStorage,
 		Filter:       []string{strings.Join(bkFilter, ",")},
 	}, nil
+}
+
+// sanitizeRepoAndTags parses the raw "t" parameter received from the client
+// to a slice of repoAndTag.
+// It also validates each repoName and tag.
+func sanitizeRepoAndTags(names []string) ([]reference.Named, error) {
+	var (
+		repoAndTags []reference.Named
+		// This map is used for deduplicating the "-t" parameter.
+		uniqNames = make(map[string]struct{})
+	)
+	for _, repo := range names {
+		if repo == "" {
+			continue
+		}
+
+		ref, err := reference.ParseNormalizedNamed(repo)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, isCanonical := ref.(reference.Canonical); isCanonical {
+			return nil, errors.New("build tag cannot contain a digest")
+		}
+
+		ref = reference.TagNameOnly(ref)
+
+		nameWithTag := ref.String()
+
+		if _, exists := uniqNames[nameWithTag]; !exists {
+			uniqNames[nameWithTag] = struct{}{}
+			repoAndTags = append(repoAndTags, ref)
+		}
+	}
+	return repoAndTags, nil
 }

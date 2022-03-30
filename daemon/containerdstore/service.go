@@ -181,7 +181,32 @@ func (cs *containerdStore) LoadImage(ctx context.Context, inTar io.ReadCloser, o
 }
 
 func (cs *containerdStore) LookupImage(ctx context.Context, name string) (*types.ImageInspect, error) {
-	panic("not implemented")
+	desc, err := cs.ResolveImage(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return &types.ImageInspect{
+		ID:              desc.Digest.String(),
+		RepoTags:        nil,
+		RepoDigests:     nil,
+		Parent:          "",
+		Comment:         "",
+		Created:         "",
+		Container:       "",
+		ContainerConfig: nil,
+		DockerVersion:   "",
+		Author:          "",
+		Config:          nil,
+		Architecture:    desc.Platform.Architecture,
+		Variant:         "",
+		Os:              desc.Platform.OS,
+		OsVersion:       desc.Platform.OSVersion,
+		Size:            desc.Size,
+		VirtualSize:     0,
+		GraphDriver:     types.GraphDriverData{},
+		RootFS:          types.RootFS{},
+		Metadata:        types.ImageMetadata{},
+	}, nil
 }
 
 func (cs *containerdStore) PushImage(ctx context.Context, image, tag string, metaHeaders map[string][]string, authConfig *types.AuthConfig, outStream io.Writer) error {

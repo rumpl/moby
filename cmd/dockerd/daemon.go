@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/docker/docker/api/server/router/build"
+	"github.com/docker/docker/builder/dockerfile"
 	"net"
 	"os"
 	"path/filepath"
@@ -287,38 +289,40 @@ func newRouterOptions(config *config.Config, d *daemon.Daemon) (routerOptions, e
 		return opts, errors.Wrap(err, "failed to create sessionmanager")
 	}
 
-	// manager, err := dockerfile.NewBuildManager(d.BuilderBackend(), d.IdentityMapping())
-	// if err != nil {
-	// 	return opts, err
-	// }
-	// cgroupParent := newCgroupParent(config)
-	// bk, err := buildkit.New(buildkit.Opt{
-	// 	SessionManager:      sm,
-	// 	Root:                filepath.Join(config.Root, "buildkit"),
-	// 	Dist:                d.DistributionServices(),
-	// 	NetworkController:   d.NetworkController(),
-	// 	DefaultCgroupParent: cgroupParent,
-	// 	RegistryHosts:       d.RegistryHosts(),
-	// 	BuilderConfig:       config.Builder,
-	// 	Rootless:            d.Rootless(),
-	// 	IdentityMapping:     d.IdentityMapping(),
-	// 	DNSConfig:           config.DNSConfig,
-	// 	ApparmorProfile:     daemon.DefaultApparmorProfile(),
-	// })
-	// if err != nil {
-	// 	return opts, err
-	// }
+	manager, err := dockerfile.NewBuildManager(d.BuilderBackend(), d.IdentityMapping())
+	if err != nil {
+		return opts, err
+	}
 
-	// bb, err := buildbackend.NewBackend(d.ImageService(), manager, bk, d.EventsService)
-	// if err != nil {
-	// 	return opts, errors.Wrap(err, "failed to create buildmanager")
-	// }
+	cgroupParent := newCgroupParent(config)
+	bk, err := buildkit.New(buildkit.Opt{
+		SessionManager:      sm,
+		ContainerdCli:       d.ContainerdCli(),
+		Root:                filepath.Join(config.Root, "buildkit"),
+		Config:              config,
+		NetworkController:   d.NetworkController(),
+		DefaultCgroupParent: cgroupParent,
+		RegistryHosts:       d.RegistryHosts(),
+		BuilderConfig:       config.Builder,
+		Rootless:            d.Rootless(),
+		IdentityMapping:     d.IdentityMapping(),
+		DNSConfig:           config.DNSConfig,
+		ApparmorProfile:     daemon.DefaultApparmorProfile(),
+	})
+	if err != nil {
+		return opts, err
+	}
+
+	bb, err := buildbackend.NewBackend(d.ImageService(), manager, bk, d.EventsService)
+	if err != nil {
+		return opts, errors.Wrap(err, "failed to create buildmanager")
+	}
 	return routerOptions{
 		sessionManager: sm,
-		// buildBackend:   bb,
-		// buildkit:       bk,
-		features: d.Features(),
-		daemon:   d,
+		buildBackend:   bb,
+		buildkit:       bk,
+		features:       d.Features(),
+		daemon:         d,
 	}, nil
 }
 
@@ -491,7 +495,7 @@ func initRouter(opts routerOptions) {
 		image.NewRouter(opts.daemon.ImageService()),
 		systemrouter.NewRouter(opts.daemon, opts.cluster, opts.buildkit, opts.features),
 		volume.NewRouter(opts.daemon.VolumesService()),
-		// build.NewRouter(opts.buildBackend, opts.daemon, opts.features),
+		build.NewRouter(opts.buildBackend, opts.daemon, opts.features),
 		sessionrouter.NewRouter(opts.sessionManager),
 		swarmrouter.NewRouter(opts.cluster),
 		pluginrouter.NewRouter(opts.daemon.PluginManager()),
@@ -501,7 +505,7 @@ func initRouter(opts routerOptions) {
 	grpcBackends := []grpcrouter.Backend{}
 	for _, b := range []interface{}{
 		opts.daemon,
-		//  opts.buildBackend,
+		opts.buildBackend,
 	} {
 		if b, ok := b.(grpcrouter.Backend); ok {
 			grpcBackends = append(grpcBackends, b)

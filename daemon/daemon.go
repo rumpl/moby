@@ -749,6 +749,10 @@ func (daemon *Daemon) IsSwarmCompatible() error {
 	return daemon.configStore.IsSwarmCompatible()
 }
 
+func (daemon *Daemon) ContainerdCli() *containerd.Client {
+	return daemon.containerdCli
+}
+
 // NewDaemon sets up everything for the daemon to be able to service
 // requests from the webserver.
 func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.Store) (daemon *Daemon, err error) {

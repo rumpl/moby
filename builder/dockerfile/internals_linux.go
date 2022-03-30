@@ -1,7 +1,6 @@
 package dockerfile // import "github.com/docker/docker/builder/dockerfile"
 
 import (
-	"context"
 	"path/filepath"
 	"strconv"
 	"strings"

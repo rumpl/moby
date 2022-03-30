@@ -54,12 +54,11 @@ func (b *Backend) Build(ctx context.Context, config backend.BuildConfig) (string
 	options := config.Options
 	useBuildKit := options.Version == types.BuilderBuildKit
 
-	tagger, err := NewTagger(b.imageComponent, config.ProgressWriter.StdoutFormatter, options.Tags)
-	if err != nil {
-		return "", err
-	}
+	var (
+		build *builder.Result
+		err   error
+	)
 
-	var build *builder.Result
 	if useBuildKit {
 		build, err = b.buildkit.Build(ctx, config)
 		if err != nil {
@@ -91,9 +90,6 @@ func (b *Backend) Build(ctx context.Context, config backend.BuildConfig) (string
 	if !useBuildKit {
 		stdout := config.ProgressWriter.StdoutFormatter
 		fmt.Fprintf(stdout, "Successfully built %s\n", stringid.TruncateID(imageID))
-	}
-	if imageID != "" {
-		err = tagger.TagImages(ctx, image.ID(imageID))
 	}
 	return imageID, err
 }

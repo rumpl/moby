@@ -753,7 +753,6 @@ pipeline {
                     // ppc64le machines run on Docker 18.06, and buildkit has some
                     // bugs on that version. Build and use buildx instead.
                     environment {
-                        USE_BUILDX      = '1'
                         DOCKER_BUILDKIT = '0'
                     }
 
@@ -873,7 +872,6 @@ pipeline {
                     // ppc64le machines run on Docker 18.06, and buildkit has some
                     // bugs on that version. Build and use buildx instead.
                     environment {
-                        USE_BUILDX      = '1'
                         DOCKER_BUILDKIT = '0'
                     }
 

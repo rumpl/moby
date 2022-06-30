@@ -12,6 +12,7 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/backend"
 	"github.com/docker/docker/builder"
@@ -20,6 +21,7 @@ import (
 	"github.com/docker/docker/libnetwork"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/streamformatter"
+	units "github.com/docker/go-units"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/control"
@@ -319,24 +321,37 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 	}
 	frontendAttrs["add-hosts"] = extraHosts
 
-	exporterName := ""
-	exporterAttrs := map[string]string{}
+	if opt.Options.ShmSize > 0 {
+		frontendAttrs["shm-size"] = strconv.FormatInt(opt.Options.ShmSize, 10)
+	}
 
+	ulimits, err := toBuildkitUlimits(opt.Options.Ulimits)
+	if err != nil {
+		return nil, err
+	} else if len(ulimits) > 0 {
+		frontendAttrs["ulimit"] = ulimits
+	}
+	reposAndTags, err := sanitizeRepoAndTags(opt.Options.Tags)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, tag := range reposAndTags {
+		names = append(names, tag.String())
+	}
+
+	exporterName := client.ExporterImage
+	exporterAttrs := map[string]string{
+		"image.name": strings.Join(names, ","),
+		"name":       strings.Join(names, ","),
+	}
 	if len(opt.Options.Outputs) > 1 {
 		return nil, errors.Errorf("multiple outputs not supported")
-	} else if len(opt.Options.Outputs) == 0 {
-		exporterName = "moby"
-	} else {
+	} else if len(opt.Options.Outputs) == 1 {
 		// cacheonly is a special type for triggering skipping all exporters
 		if opt.Options.Outputs[0].Type != "cacheonly" {
 			exporterName = opt.Options.Outputs[0].Type
 			exporterAttrs = opt.Options.Outputs[0].Attrs
-		}
-	}
-
-	if exporterName == "moby" {
-		if len(opt.Options.Tags) > 0 {
-			exporterAttrs["name"] = strings.Join(opt.Options.Tags, ",")
 		}
 	}
 
@@ -558,6 +573,18 @@ func toBuildkitExtraHosts(inp []string) (string, error) {
 	return strings.Join(hosts, ","), nil
 }
 
+// toBuildkitUlimits converts ulimits from docker type=soft:hard format to buildkit's csv format
+func toBuildkitUlimits(inp []*units.Ulimit) (string, error) {
+	if len(inp) == 0 {
+		return "", nil
+	}
+	ulimits := make([]string, 0, len(inp))
+	for _, ulimit := range inp {
+		ulimits = append(ulimits, ulimit.String())
+	}
+	return strings.Join(ulimits, ","), nil
+}
+
 func toBuildkitPruneInfo(opts types.BuildCachePruneOptions) (client.PruneInfo, error) {
 	var until time.Duration
 	untilValues := opts.Filters.Get("until")          // canonical
@@ -609,4 +636,39 @@ func toBuildkitPruneInfo(opts types.BuildCachePruneOptions) (client.PruneInfo, e
 		KeepBytes:    opts.KeepStorage,
 		Filter:       []string{strings.Join(bkFilter, ",")},
 	}, nil
+}
+
+// sanitizeRepoAndTags parses the raw "t" parameter received from the client
+// to a slice of repoAndTag.
+// It also validates each repoName and tag.
+func sanitizeRepoAndTags(names []string) ([]reference.Named, error) {
+	var (
+		repoAndTags []reference.Named
+		// This map is used for deduplicating the "-t" parameter.
+		uniqNames = make(map[string]struct{})
+	)
+	for _, repo := range names {
+		if repo == "" {
+			continue
+		}
+
+		ref, err := reference.ParseNormalizedNamed(repo)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, isCanonical := ref.(reference.Canonical); isCanonical {
+			return nil, errors.New("build tag cannot contain a digest")
+		}
+
+		ref = reference.TagNameOnly(ref)
+
+		nameWithTag := ref.String()
+
+		if _, exists := uniqNames[nameWithTag]; !exists {
+			uniqNames[nameWithTag] = struct{}{}
+			repoAndTags = append(repoAndTags, ref)
+		}
+	}
+	return repoAndTags, nil
 }

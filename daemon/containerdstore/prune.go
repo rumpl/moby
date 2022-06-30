@@ -35,18 +35,6 @@ func (cs *containerdStore) ImagesPrune(ctx context.Context, pruneFilters filters
 			errs = append(errs, err)
 			continue
 		}
-
-		err = is.Delete(ctx, img.Name, containerdimages.SynchronousDelete())
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		report.ImagesDeleted = append(report.ImagesDeleted,
-			types.ImageDeleteResponseItem{
-				Untagged: img.Name,
-			},
-		)
 	}
 
 	for digest, size := range toDelete {
@@ -58,6 +46,20 @@ func (cs *containerdStore) ImagesPrune(ctx context.Context, pruneFilters filters
 		report.ImagesDeleted = append(report.ImagesDeleted,
 			types.ImageDeleteResponseItem{
 				Deleted: digest.String(),
+			},
+		)
+	}
+
+	for _, img := range images {
+		err = is.Delete(ctx, img.Name, containerdimages.SynchronousDelete())
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		report.ImagesDeleted = append(report.ImagesDeleted,
+			types.ImageDeleteResponseItem{
+				Untagged: img.Name,
 			},
 		)
 	}

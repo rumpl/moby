@@ -190,6 +190,8 @@ outer:
 			}
 		case <-stop:
 			done = true // allow ui to update once more
+		case <-ctx.Done():
+			done = true
 		}
 	}
 }

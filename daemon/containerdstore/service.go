@@ -20,6 +20,7 @@ import (
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/streamformatter"
 	"github.com/docker/docker/pkg/stringid"
+	"github.com/opencontainers/image-spec/identity"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 
@@ -261,11 +262,25 @@ func (cs *containerdStore) Images(ctx context.Context, opts types.ImageListOptio
 		return nil, err
 	}
 
+	snapshotter := cs.client.SnapshotService("overlayfs")
 	var ret []*types.ImageSummary
 	for _, image := range images {
 		size, err := image.Size(ctx)
 		if err != nil {
 			return nil, err
+		}
+
+		var virtualSize int64
+		diffIDs, err := image.RootFS(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, chainID := range identity.ChainIDs(diffIDs) {
+			usage, err := snapshotter.Usage(ctx, chainID.String())
+			if err != nil {
+				return nil, err
+			}
+			virtualSize += usage.Size
 		}
 
 		ret = append(ret, &types.ImageSummary{
@@ -274,7 +289,7 @@ func (cs *containerdStore) Images(ctx context.Context, opts types.ImageListOptio
 			Containers:  -1,
 			ParentID:    "",
 			SharedSize:  -1,
-			VirtualSize: 10,
+			VirtualSize: virtualSize,
 			ID:          image.Target().Digest.String(),
 			Created:     image.Metadata().CreatedAt.Unix(),
 			Size:        size,

@@ -58,7 +58,8 @@ func newController(rt http.RoundTripper, opt Opt) (*control.Controller, error) {
 
 	snapshotter := ctd.DefaultSnapshotter
 
-	wo, err := containerd.NewWorkerOpt(opt.Root, "/var/run/containerd/containerd.sock", snapshotter, "moby",
+	// FIXME(ndeloof) get containerd.sock path from config
+	wo, err := containerd.NewWorkerOpt(opt.Root, "/var/run/docker/containerd/containerd.sock", snapshotter, "moby",
 		map[string]string{}, dns, nc, opt.ApparmorProfile, nil, ctd.WithTimeout(60*time.Second))
 	if err != nil {
 		return nil, err

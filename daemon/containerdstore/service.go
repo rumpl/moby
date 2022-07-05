@@ -264,6 +264,39 @@ func (cs *containerdStore) Images(ctx context.Context, opts types.ImageListOptio
 		return nil, err
 	}
 
+	var beforeFilter, sinceFilter *time.Time
+	err = opts.Filters.WalkValues("before", func(value string) error {
+		ref, err := reference.ParseDockerRef(value)
+		if err != nil {
+			return err
+		}
+		img, err := cs.client.GetImage(ctx, ref.String())
+		if img != nil {
+			at := img.Metadata().CreatedAt
+			beforeFilter = &at
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = opts.Filters.WalkValues("since", func(value string) error {
+		ref, err := reference.ParseDockerRef(value)
+		if err != nil {
+			return err
+		}
+		img, err := cs.client.GetImage(ctx, ref.String())
+		if img != nil {
+			at := img.Metadata().CreatedAt
+			beforeFilter = &at
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	snapshotter := cs.client.SnapshotService("overlayfs")
 	var ret []*types.ImageSummary
 	for _, image := range images {
@@ -285,6 +318,25 @@ func (cs *containerdStore) Images(ctx context.Context, opts types.ImageListOptio
 			virtualSize += usage.Size
 		}
 
+		created := image.Metadata().CreatedAt
+		if beforeFilter != nil {
+			if created.Equal(*beforeFilter) || created.After(*beforeFilter) {
+				continue
+			}
+		}
+
+		if sinceFilter != nil {
+			if created.Equal(*sinceFilter) || created.Before(*sinceFilter) {
+				continue
+			}
+		}
+
+		if opts.Filters.Contains("label") {
+			if !opts.Filters.MatchKVList("label", image.Labels()) {
+				continue
+			}
+		}
+
 		ret = append(ret, &types.ImageSummary{
 			RepoDigests: []string{image.Name() + "@" + image.Target().Digest.String()}, // "hello-world@sha256:bfea6278a0a267fad2634554f4f0c6f31981eea41c553fdf5a83e95a41d40c38"},
 			RepoTags:    []string{image.Name()},
@@ -293,7 +345,7 @@ func (cs *containerdStore) Images(ctx context.Context, opts types.ImageListOptio
 			SharedSize:  -1,
 			VirtualSize: virtualSize,
 			ID:          image.Target().Digest.String(),
-			Created:     image.Metadata().CreatedAt.Unix(),
+			Created:     created.Unix(),
 			Size:        size,
 		})
 	}

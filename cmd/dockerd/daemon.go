@@ -306,6 +306,8 @@ func newRouterOptions(config *config.Config, d *daemon.Daemon) (routerOptions, e
 		IdentityMapping:     d.IdentityMapping(),
 		DNSConfig:           config.DNSConfig,
 		ApparmorProfile:     daemon.DefaultApparmorProfile(),
+		ContainerdAddress:   config.ContainerdAddr,
+		ContainerdNamespace: config.ContainerdNamespace,
 	})
 	if err != nil {
 		return opts, err

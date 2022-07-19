@@ -442,6 +442,21 @@ RUN --mount=type=cache,target=/root/.cache \
     --mount=type=tmpfs,target=cli/winresources/docker-proxy \
         hack/make.sh cross
 
+FROM scratch AS bundles
+
+FROM --platform=$BUILDPLATFORM alpine AS build-pkg
+ARG TARGETPLATFORM
+RUN --mount=type=bind,from=bundles,target=/bundles <<EOT
+set -e
+mkdir /out
+if [ -d "/bundles/cross/$TARGETPLATFORM-daemon" ]; then
+    echo "found bundles for $TARGETPLATFORM"
+    cp /bundles/cross/"$TARGETPLATFORM"-daemon/* /out/
+else
+    echo "bundles not found for $TARGETPLATFORM"
+fi
+EOT
+
 FROM scratch AS binary
 COPY --from=build-binary /build/bundles/ /
 
@@ -450,6 +465,9 @@ COPY --from=build-dynbinary /build/bundles/ /
 
 FROM scratch AS cross
 COPY --from=build-cross /build/bundles/ /
+
+FROM scratch AS pkg
+COPY --from=build-pkg /out /
 
 FROM dev AS final
 COPY . /go/src/github.com/docker/docker

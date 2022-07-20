@@ -53,18 +53,18 @@ variable "PACKAGER_NAME" {
 target "_common" {
   args = {
     BUILDKIT_CONTEXT_KEEP_GIT_DIR = 1 # https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#built-in-build-args
-    APT_MIRROR = APT_MIRROR
-    DOCKER_DEBUG = DOCKER_DEBUG
-    DOCKER_STRIP = DOCKER_STRIP
-    DOCKER_LINKMODE = DOCKER_LINKMODE
-    DOCKER_LDFLAGS = DOCKER_LDFLAGS
-    DOCKER_BUILDMODE = DOCKER_BUILDMODE
-    DOCKER_BUILDTAGS = DOCKER_BUILDTAGS
-    VERSION = VERSION
-    PLATFORM = PLATFORM
-    PRODUCT = PRODUCT
-    DEFAULT_PRODUCT_LICENSE = DEFAULT_PRODUCT_LICENSE
-    PACKAGER_NAME = PACKAGER_NAME
+    APT_MIRROR                    = APT_MIRROR
+    DOCKER_DEBUG                  = DOCKER_DEBUG
+    DOCKER_STRIP                  = DOCKER_STRIP
+    DOCKER_LINKMODE               = DOCKER_LINKMODE
+    DOCKER_LDFLAGS                = DOCKER_LDFLAGS
+    DOCKER_BUILDMODE              = DOCKER_BUILDMODE
+    DOCKER_BUILDTAGS              = DOCKER_BUILDTAGS
+    VERSION                       = VERSION
+    PLATFORM                      = PLATFORM
+    PRODUCT                       = PRODUCT
+    DEFAULT_PRODUCT_LICENSE       = DEFAULT_PRODUCT_LICENSE
+    PACKAGER_NAME                 = PACKAGER_NAME
   }
 }
 
@@ -96,8 +96,8 @@ variable "BINARY_OUTPUT" {
 
 target "binary" {
   inherits = ["_common"]
-  target = "binary"
-  output = [BINARY_OUTPUT]
+  target   = "binary"
+  output   = [BINARY_OUTPUT]
 }
 
 target "binary-cross" {
@@ -114,8 +114,8 @@ variable "ALL_OUTPUT" {
 
 target "all" {
   inherits = ["_common"]
-  target = "all"
-  output = [ALL_OUTPUT]
+  target   = "all"
+  output   = [ALL_OUTPUT]
 }
 
 target "all-cross" {
@@ -135,31 +135,49 @@ variable "SYSTEMD" {
 
 target "dev" {
   inherits = ["_common"]
-  target = "dev"
+  target   = "dev"
   args = {
     SYSTEMD = SYSTEMD
   }
-  tags = [DEV_IMAGE]
+  tags   = [DEV_IMAGE]
   output = ["type=docker"]
 }
 
 #
-# dev
+# simple
 #
 
-variable "DEV_IMAGE" {
-  default = "docker-dev"
-}
-variable "SYSTEMD" {
-  default = "false"
+target "simple" {
+  inherits   = ["_common"]
+  dockerfile = "Dockerfile.simple"
+  tags       = ["docker:simple"]
+  output     = ["type=docker"]
+  contexts = {
+    tini        = "target:_tini"
+    runc        = "target:_runc"
+    containerd  = "target:_containerd"
+    rootlesskit = "target:_rootlesskit"
+    dockercli   = "target:_dockercli"
+  }
 }
 
-target "dev" {
+target "_tini" {
   inherits = ["_common"]
-  target = "final"
-  args = {
-    SYSTEMD = SYSTEMD
-  }
-  tags = [DEV_IMAGE]
-  output = ["type=docker"]
+  target   = "tini"
+}
+target "_runc" {
+  inherits = ["_common"]
+  target   = "runc"
+}
+target "_containerd" {
+  inherits = ["_common"]
+  target   = "containerd"
+}
+target "_rootlesskit" {
+  inherits = ["_common"]
+  target   = "rootlesskit"
+}
+target "_dockercli" {
+  inherits = ["_common"]
+  target   = "dockercli"
 }

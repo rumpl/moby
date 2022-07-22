@@ -59,6 +59,11 @@ function "bindir" {
   result = DESTDIR != "" ? DESTDIR : "./bundles/${defaultdir}"
 }
 
+// Special target: https://github.com/docker/metadata-action#bake-definition
+target "meta-helper" {
+  tags = ["dockereng/moby-bin:local"]
+}
+
 target "_common" {
   args = {
     BUILDKIT_CONTEXT_KEEP_GIT_DIR = 1 # https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#built-in-build-args
@@ -193,4 +198,13 @@ target "_rootlesskit" {
 target "_dockercli" {
   inherits = ["_common"]
   target = "dockercli"
+}
+
+#
+# pkg
+#
+
+target "pkg" {
+  inherits = ["_common", "_platforms", "meta-helper"]
+  target = "pkg"
 }

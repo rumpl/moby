@@ -756,6 +756,14 @@ FROM scratch AS all
 COPY --link --from=release-all /out /
 
 # usage:
+# > docker buildx bake pkg
+FROM scratch AS pkg
+COPY --link --from=tini             /out/ /
+COPY --link --from=rootlesskit      /out/ /
+COPY --link --from=vpnkit           /     /
+COPY --link --from=build            /out  /
+
+# usage:
 # > make shell
 FROM dev-base AS dev
 COPY . .

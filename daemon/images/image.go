@@ -17,7 +17,9 @@ import (
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/layer"
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -44,6 +46,16 @@ type manifestList struct {
 
 type manifest struct {
 	Config specs.Descriptor `json:"config"`
+}
+
+func (i *ImageService) ResolveDescriptor(ctx context.Context, refOrID string) (ocispec.Descriptor, error) {
+	// Only makes sense when conatinerd image store is used
+	panic("not implementeed")
+}
+
+func (i *ImageService) PrepareSnapshot(ctx context.Context, id string, image string, platform *v1.Platform) error {
+	// Only makes sense when conatinerd image store is used
+	panic("not implemented")
 }
 
 func (i *ImageService) manifestMatchesPlatform(ctx context.Context, img *image.Image, platform specs.Platform) (bool, error) {

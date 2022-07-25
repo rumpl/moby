@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/daemon/images"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/layer"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -43,6 +44,11 @@ type ImageService interface {
 	ImageHistory(ctx context.Context, name string) ([]*imagetype.HistoryResponseItem, error)
 	CommitImage(c backend.CommitConfig) (image.ID, error)
 	SquashImage(id, parent string) (string, error)
+
+	// Containerd related methods
+
+	ResolveDescriptor(ctx context.Context, refOrID string) (ocispec.Descriptor, error)
+	PrepareSnapshot(ctx context.Context, id string, image string, platform *v1.Platform) error
 
 	// Layers
 

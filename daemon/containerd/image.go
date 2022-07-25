@@ -32,7 +32,7 @@ var truncatedID = regexp.MustCompile(`^([a-f0-9]{4,64})$`)
 
 // GetImage returns an image corresponding to the image referred to by refOrID.
 func (i *ImageService) GetImage(ctx context.Context, refOrID string, options imagetype.GetImageOpts) (*image.Image, error) {
-	desc, err := i.resolveDescriptor(ctx, refOrID)
+	desc, err := i.ResolveDescriptor(ctx, refOrID)
 	if err != nil {
 		return nil, err
 	}
@@ -150,10 +150,10 @@ func (i *ImageService) size(ctx context.Context, desc ocispec.Descriptor, platfo
 	return size, nil
 }
 
-// resolveDescriptor searches for a descriptor based on the given
+// ResolveDescriptor searches for a descriptor based on the given
 // reference or identifier. Returns the descriptor of
 // the image, which could be a manifest list, manifest, or config.
-func (i *ImageService) resolveDescriptor(ctx context.Context, refOrID string) (ocispec.Descriptor, error) {
+func (i *ImageService) ResolveDescriptor(ctx context.Context, refOrID string) (ocispec.Descriptor, error) {
 	parsed, err := reference.ParseAnyReference(refOrID)
 	if err != nil {
 		return ocispec.Descriptor{}, errdefs.InvalidParameter(err)

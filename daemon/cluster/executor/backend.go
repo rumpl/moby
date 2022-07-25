@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
+	opts "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	swarmtypes "github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -75,5 +76,5 @@ type VolumeBackend interface {
 type ImageBackend interface {
 	PullImage(ctx context.Context, image, tag string, platform *specs.Platform, metaHeaders map[string][]string, authConfig *types.AuthConfig, outStream io.Writer) error
 	GetRepository(context.Context, reference.Named, *types.AuthConfig) (distribution.Repository, error)
-	GetImage(ctx context.Context, refOrID string, platform *specs.Platform) (retImg *image.Image, retErr error)
+	GetImage(ctx context.Context, refOrID string, options opts.GetImageOpts) (retImg *image.Image, retErr error)
 }

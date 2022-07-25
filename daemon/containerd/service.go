@@ -569,6 +569,10 @@ func (cs *containerdStore) CommitImage(c backend.CommitConfig) (image.ID, error)
 	panic("not implemented")
 }
 
+func (cs *containerdStore) GetContainerdImage(ctx context.Context, refOrID string, platform *v1.Platform) (containerdimages.Image, error) {
+	return cs.resolveImageName2(ctx, refOrID)
+}
+
 func (cs *containerdStore) GetImage(ctx context.Context, refOrID string, platform *v1.Platform) (*image.Image, error) {
 	desc, err := cs.ResolveImage(ctx, refOrID)
 	if err != nil {

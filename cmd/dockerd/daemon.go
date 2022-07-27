@@ -226,10 +226,14 @@ func (cli *DaemonCli) start(opts *daemonOptions) (err error) {
 
 	logrus.Info("Daemon has completed initialization")
 
-	routerOptions, err := newRouterOptions(cli.Config, d)
+	routerCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	routerOptions, err := newRouterOptions(routerCtx, cli.Config, d)
 	if err != nil {
+		cancel()
 		return err
 	}
+	defer cancel()
+
 	routerOptions.api = cli.api
 	routerOptions.cluster = c
 
@@ -278,7 +282,7 @@ type routerOptions struct {
 	cluster        *cluster.Cluster
 }
 
-func newRouterOptions(config *config.Config, d *daemon.Daemon) (routerOptions, error) {
+func newRouterOptions(ctx context.Context, config *config.Config, d *daemon.Daemon) (routerOptions, error) {
 	opts := routerOptions{}
 	sm, err := session.NewManager()
 	if err != nil {
@@ -295,32 +299,35 @@ func newRouterOptions(config *config.Config, d *daemon.Daemon) (routerOptions, e
 		features:       d.Features(),
 		daemon:         d,
 	}
-	if !d.UsesSnapshotter() {
-		bk, err := buildkit.New(buildkit.Opt{
-			SessionManager:      sm,
-			Root:                filepath.Join(config.Root, "buildkit"),
-			Dist:                d.DistributionServices(),
-			NetworkController:   d.NetworkController(),
-			DefaultCgroupParent: cgroupParent,
-			RegistryHosts:       d.RegistryHosts(),
-			BuilderConfig:       config.Builder,
-			Rootless:            d.Rootless(),
-			IdentityMapping:     d.IdentityMapping(),
-			DNSConfig:           config.DNSConfig,
-			ApparmorProfile:     daemon.DefaultApparmorProfile(),
-		})
-		if err != nil {
-			return opts, err
-		}
 
-		bb, err := buildbackend.NewBackend(d.ImageService(), manager, bk, d.EventsService)
-		if err != nil {
-			return opts, errors.Wrap(err, "failed to create buildmanager")
-		}
-
-		ro.buildBackend = bb
-		ro.buildkit = bk
+	bk, err := buildkit.New(ctx, buildkit.Opt{
+		SessionManager:      sm,
+		Root:                filepath.Join(config.Root, "buildkit"),
+		Dist:                d.DistributionServices(),
+		NetworkController:   d.NetworkController(),
+		DefaultCgroupParent: cgroupParent,
+		RegistryHosts:       d.RegistryHosts(),
+		BuilderConfig:       config.Builder,
+		Rootless:            d.Rootless(),
+		IdentityMapping:     d.IdentityMapping(),
+		DNSConfig:           config.DNSConfig,
+		ApparmorProfile:     daemon.DefaultApparmorProfile(),
+		UseSnapshotter:      d.UsesSnapshotter(),
+		Snapshotter:         d.ImageService().StorageDriver(),
+		ContainerdAddress:   config.ContainerdAddr,
+		ContainerdNamespace: config.ContainerdNamespace,
+	})
+	if err != nil {
+		return opts, err
 	}
+
+	bb, err := buildbackend.NewBackend(d.ImageService(), manager, bk, d.EventsService)
+	if err != nil {
+		return opts, errors.Wrap(err, "failed to create buildmanager")
+	}
+
+	ro.buildBackend = bb
+	ro.buildkit = bk
 
 	return ro, nil
 }

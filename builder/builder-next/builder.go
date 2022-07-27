@@ -15,6 +15,8 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/backend"
 	"github.com/docker/docker/builder"
+	"github.com/docker/docker/builder/builder-next/control"
+	mobycontrol "github.com/docker/docker/builder/builder-next/control"
 	"github.com/docker/docker/daemon/config"
 	"github.com/docker/docker/daemon/images"
 	"github.com/docker/docker/libnetwork"
@@ -24,7 +26,6 @@ import (
 	"github.com/docker/go-units"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/control"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/util/entitlements"
@@ -77,16 +78,21 @@ type Opt struct {
 	IdentityMapping     idtools.IdentityMapping
 	DNSConfig           config.DNSConfig
 	ApparmorProfile     string
+	UseSnapshotter      bool
+	Snapshotter         string
+	ContainerdAddress   string
+	ContainerdNamespace string
 }
 
 // Builder can build using BuildKit backend
 type Builder struct {
-	controller     *control.Controller
+	controller     *mobycontrol.Controller
 	dnsconfig      config.DNSConfig
 	reqBodyHandler *reqBodyHandler
 
-	mu   sync.Mutex
-	jobs map[string]*buildJob
+	mu             sync.Mutex
+	jobs           map[string]*buildJob
+	useSnapshotter bool
 }
 
 // New creates a new builder
@@ -102,6 +108,7 @@ func New(opt Opt) (*Builder, error) {
 		dnsconfig:      opt.DNSConfig,
 		reqBodyHandler: reqHandler,
 		jobs:           map[string]*buildJob{},
+		useSnapshotter: opt.UseSnapshotter,
 	}
 	return b, nil
 }
@@ -334,11 +341,27 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 	exporterName := ""
 	exporterAttrs := map[string]string{}
 
+	if b.useSnapshotter {
+		exporterName = client.ExporterImage
+		reposAndTags, err := control.SanitizeRepoAndTags(opt.Options.Tags)
+		if err != nil {
+			return nil, err
+		}
+		names := strings.Join(reposAndTags, ",")
+		// TODO(thaJeztah): these options are ignored (overwritten) if opt.Options.Outputs is set to a "non-cache-only" output.
+		exporterAttrs = map[string]string{
+			"image.name": names,
+			"name":       names,
+		}
+	}
+
 	if len(opt.Options.Outputs) > 1 {
 		return nil, errors.Errorf("multiple outputs not supported")
 	} else if len(opt.Options.Outputs) == 0 {
-		exporterName = "moby"
-	} else {
+		if !b.useSnapshotter {
+			exporterName = "moby"
+		}
+	} else if len(opt.Options.Outputs) == 1 {
 		// cacheonly is a special type for triggering skipping all exporters
 		if opt.Options.Outputs[0].Type != "cacheonly" {
 			exporterName = opt.Options.Outputs[0].Type
@@ -346,14 +369,13 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 		}
 	}
 
-	if exporterName == "moby" {
+	if !b.useSnapshotter && exporterName == "moby" {
 		if len(opt.Options.Tags) > 0 {
 			exporterAttrs["name"] = strings.Join(opt.Options.Tags, ",")
 		}
 	}
 
 	cache := controlapi.CacheOptions{}
-
 	if inlineCache := opt.Options.BuildArgs["BUILDKIT_INLINE_CACHE"]; inlineCache != nil {
 		if b, err := strconv.ParseBool(*inlineCache); err == nil && b {
 			cache.Exports = append(cache.Exports, &controlapi.CacheOptionsEntry{

@@ -305,14 +305,6 @@ func newResolverFromAuthConfig(authConfig *types.AuthConfig) (remotes.Resolver, 
 	}), tracker
 }
 
-func (cs *containerdStore) LogImageEvent(imageID, refName, action string) {
-	panic("not implemented")
-}
-
-func (cs *containerdStore) LogImageEventWithAttributes(imageID, refName, action string, attributes map[string]string) {
-	panic("not implemented")
-}
-
 func (cs *containerdStore) GetLayerFolders(img *image.Image, rwLayer layer.RWLayer) ([]string, error) {
 	panic("not implemented")
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/containerd/snapshots"
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
@@ -37,12 +38,14 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/singleflight"
 )
 
 var shortID = regexp.MustCompile(`^([a-f0-9]{4,64})$`)
 
 type containerdStore struct {
 	client *containerd.Client
+	usage  singleflight.Group
 }
 
 func NewService(c *containerd.Client) *containerdStore {
@@ -550,11 +553,52 @@ func (cs *containerdStore) GetRepository(context.Context, reference.Named, *type
 }
 
 func (cs *containerdStore) ImageDiskUsage(ctx context.Context) ([]*types.ImageSummary, error) {
-	panic("not implemented")
+	ch := cs.usage.DoChan("ImageDiskUsage", func() (interface{}, error) {
+		// Get all top images with extra attributes
+		images, err := cs.Images(ctx, types.ImageListOptions{
+			Filters:        filters.NewArgs(),
+			SharedSize:     true,
+			ContainerCount: true,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve image list: %v", err)
+		}
+		return images, nil
+	})
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case res := <-ch:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		return res.Val.([]*types.ImageSummary), nil
+	}
 }
 
 func (cs *containerdStore) LayerDiskUsage(ctx context.Context) (int64, error) {
-	panic("not implemented")
+	ch := cs.usage.DoChan("LayerDiskUsage", func() (interface{}, error) {
+		var allLayersSize int64
+		snapshotter := cs.client.SnapshotService(containerd.DefaultSnapshotter)
+		snapshotter.Walk(ctx, func(ctx context.Context, info snapshots.Info) error {
+			usage, err := snapshotter.Usage(ctx, info.Name)
+			if err != nil {
+				return err
+			}
+			allLayersSize += usage.Size
+			return nil
+		})
+		return allLayersSize, nil
+	})
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case res := <-ch:
+		if res.Err != nil {
+			return 0, res.Err
+		}
+		return res.Val.(int64), nil
+	}
 }
 
 func (cs *containerdStore) ReleaseLayer(rwlayer layer.RWLayer) error {

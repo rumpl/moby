@@ -448,10 +448,6 @@ func (cs *containerdStore) LoadImage(ctx context.Context, inTar io.ReadCloser, o
 	return nil
 }
 
-func (cs *containerdStore) LookupImage(ctx context.Context, name string) (*types.ImageInspect, error) {
-	panic("not implemented")
-}
-
 func (cs *containerdStore) PushImage(ctx context.Context, image, tag string, metaHeaders map[string][]string, authConfig *types.AuthConfig, outStream io.Writer) error {
 	// TODO: Pass this from user?
 	platformMatcher := platforms.DefaultStrict()

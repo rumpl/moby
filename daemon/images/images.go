@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/pkg/errors"
 
 	"github.com/docker/distribution/reference"
@@ -39,7 +40,7 @@ func (i *ImageService) Map() map[image.ID]*image.Image {
 }
 
 // Images returns a filtered list of images.
-func (i *ImageService) Images(_ context.Context, opts types.ImageListOptions) ([]*types.ImageSummary, error) {
+func (i *ImageService) Images(ctx context.Context, opts types.ImageListOptions) ([]*types.ImageSummary, error) {
 	if err := opts.Filters.Validate(acceptedImageFilterTags); err != nil {
 		return nil, err
 	}
@@ -58,7 +59,7 @@ func (i *ImageService) Images(_ context.Context, opts types.ImageListOptions) ([
 		err                       error
 	)
 	err = opts.Filters.WalkValues("before", func(value string) error {
-		beforeFilter, err = i.GetImage(nil, value, nil)
+		beforeFilter, err = i.GetImage(ctx, value, imagetypes.GetImageOpts{})
 		return err
 	})
 	if err != nil {
@@ -66,7 +67,7 @@ func (i *ImageService) Images(_ context.Context, opts types.ImageListOptions) ([
 	}
 
 	err = opts.Filters.WalkValues("since", func(value string) error {
-		sinceFilter, err = i.GetImage(nil, value, nil)
+		sinceFilter, err = i.GetImage(ctx, value, imagetypes.GetImageOpts{})
 		return err
 	})
 	if err != nil {

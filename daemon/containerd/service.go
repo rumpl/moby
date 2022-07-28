@@ -411,7 +411,7 @@ func (cs *containerdStore) ImageDelete(ctx context.Context, imageRef string, for
 	return records, nil
 }
 
-func (cs *containerdStore) ImageHistory(name string) ([]*imagetype.HistoryResponseItem, error) {
+func (cs *containerdStore) ImageHistory(ctx context.Context, name string) ([]*imagetype.HistoryResponseItem, error) {
 	panic("not implemented")
 }
 
@@ -573,34 +573,63 @@ func (cs *containerdStore) GetContainerdImage(ctx context.Context, refOrID strin
 	return cs.resolveImageName2(ctx, refOrID)
 }
 
-func (cs *containerdStore) GetImage(ctx context.Context, refOrID string, platform *v1.Platform) (*image.Image, error) {
-	desc, err := cs.ResolveImage(ctx, refOrID)
+func (cs *containerdStore) GetImage(ctx context.Context, refOrID string, options imagetype.GetImageOpts) (*image.Image, error) {
+	ii, img, err := cs.getImage(ctx, refOrID, options.Platform)
 	if err != nil {
 		return nil, err
 	}
 
+	if options.Details {
+		size, err := ii.Size(ctx)
+		if err != nil {
+			return nil, err
+		}
+		img.Details = &image.Details{
+			Size:        size,
+			Metadata:    nil,
+			Driver:      cs.GraphDriverName(),
+			LastUpdated: ii.Metadata().UpdatedAt,
+		}
+	}
+	return img, err
+}
+
+func (cs *containerdStore) getImage(ctx context.Context, refOrID string, platform *v1.Platform) (containerd.Image, *image.Image, error) {
+	desc, err := cs.ResolveImage(ctx, refOrID)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	ctrdimg, err := cs.resolveImageName2(ctx, refOrID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ii := containerd.NewImage(cs.client, ctrdimg)
 	provider := cs.client.ContentStore()
 	conf, err := ctrdimg.Config(ctx, provider, ii.Platform())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var ociimage v1.Image
 	imageConfigBytes, err := content.ReadBlob(ctx, ii.ContentStore(), conf)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := json.Unmarshal(imageConfigBytes, &ociimage); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &image.Image{
+	fs, err := ii.RootFS(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	rootfs := image.NewRootFS()
+	for _, id := range fs {
+		rootfs.Append(layer.DiffID(id))
+	}
+	return ii, &image.Image{
 		V1Image: image.V1Image{
 			ID:           string(desc.Digest),
 			OS:           ociimage.OS,
@@ -613,6 +642,7 @@ func (cs *containerdStore) GetImage(ctx context.Context, refOrID string, platfor
 				WorkingDir: ociimage.Config.WorkingDir,
 			},
 		},
+		RootFS: rootfs,
 	}, nil
 }
 

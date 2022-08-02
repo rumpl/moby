@@ -946,36 +946,16 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 		return nil, err
 	}
 
-	layerStore, err := layer.NewStoreFromOptions(layer.StoreOptions{
-		Root:                      config.Root,
-		MetadataStorePathTemplate: filepath.Join(config.Root, "image", "%s", "layerdb"),
-		GraphDriver:               d.graphDriver,
-		GraphDriverOptions:        config.GraphOptions,
-		IDMapping:                 idMapping,
-		PluginGetter:              d.PluginStore,
-		ExperimentalEnabled:       config.Experimental,
-	})
-	if err != nil {
-		return nil, err
+	driver := ""
+	if d.UsesSnapshotter() {
+		driver = containerd.DefaultSnapshotter
+	} else {
+		driver = d.graphDriver
 	}
-
-	// As layerstore initialization may set the driver
-	d.graphDriver = layerStore.DriverName()
 
 	// Configure and validate the kernels security support. Note this is a Linux/FreeBSD
-	// operation only, so it is safe to pass *just* the runtime OS graphdriver.
-	if err := configureKernelSecuritySupport(config, d.graphDriver); err != nil {
-		return nil, err
-	}
-
-	imageRoot := filepath.Join(config.Root, "image", d.graphDriver)
-	ifs, err := image.NewFSStoreBackend(filepath.Join(imageRoot, "imagedb"))
-	if err != nil {
-		return nil, err
-	}
-
-	imageStore, err := image.NewImageStore(ifs, layerStore)
-	if err != nil {
+	// operation only, so it is safe to pass *just* the runtime OS graphdriver/containerd snapshotter.
+	if err := configureKernelSecuritySupport(config, driver); err != nil {
 		return nil, err
 	}
 
@@ -990,28 +970,6 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 	err = migrateTrustKeyID(config.TrustKeyPath, idPath)
 	if err != nil {
 		logrus.WithError(err).Warnf("unable to migrate engine ID; a new engine ID will be generated")
-	}
-
-	// We have a single tag/reference store for the daemon globally. However, it's
-	// stored under the graphdriver. On host platforms which only support a single
-	// container OS, but multiple selectable graphdrivers, this means depending on which
-	// graphdriver is chosen, the global reference store is under there. For
-	// platforms which support multiple container operating systems, this is slightly
-	// more problematic as where does the global ref store get located? Fortunately,
-	// for Windows, which is currently the only daemon supporting multiple container
-	// operating systems, the list of graphdrivers available isn't user configurable.
-	// For backwards compatibility, we just put it under the windowsfilter
-	// directory regardless.
-	refStoreLocation := filepath.Join(imageRoot, `repositories.json`)
-	rs, err := refstore.NewReferenceStore(refStoreLocation)
-	if err != nil {
-		return nil, fmt.Errorf("Couldn't create reference store repository: %s", err)
-	}
-	d.ReferenceStore = rs
-
-	distributionMetadataStore, err := dmetadata.NewFSMetadataStore(filepath.Join(imageRoot, "distribution"))
-	if err != nil {
-		return nil, err
 	}
 
 	// Check if Devices cgroup is mounted, it is hard requirement for container security,
@@ -1044,59 +1002,109 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 
 	d.linkIndex = newLinkIndex()
 
-	imgSvcConfig := images.ImageServiceConfig{
-		ContainerStore:            d.containers,
-		DistributionMetadataStore: distributionMetadataStore,
-		EventsService:             d.EventsService,
-		ImageStore:                imageStore,
-		LayerStore:                layerStore,
-		MaxConcurrentDownloads:    config.MaxConcurrentDownloads,
-		MaxConcurrentUploads:      config.MaxConcurrentUploads,
-		MaxDownloadAttempts:       config.MaxDownloadAttempts,
-		ReferenceStore:            rs,
-		RegistryService:           registryService,
-		ContentNamespace:          config.ContainerdNamespace,
-	}
-
-	// This is a temporary environment variables used in CI to allow pushing
-	// manifest v2 schema 1 images to test-registries used for testing *pulling*
-	// these images.
-	if os.Getenv("DOCKER_ALLOW_SCHEMA1_PUSH_DONOTUSE") != "" {
-		imgSvcConfig.TrustKey, err = loadOrCreateTrustKey(config.TrustKeyPath)
-		if err != nil {
-			return nil, err
-		}
-		if err = system.MkdirAll(filepath.Join(config.Root, "trust"), 0700); err != nil {
-			return nil, err
-		}
-	}
-
-	// containerd is not currently supported with Windows.
-	// So sometimes d.containerdCli will be nil
-	// In that case we'll create a local content store... but otherwise we'll use containerd
-	if d.containerdCli != nil {
-		imgSvcConfig.Leases = d.containerdCli.LeasesService()
-		imgSvcConfig.ContentStore = d.containerdCli.ContentStore()
-	} else {
-		cs, lm, err := d.configureLocalContentStore()
-		if err != nil {
-			return nil, err
-		}
-		imgSvcConfig.ContentStore = cs
-		imgSvcConfig.Leases = lm
-	}
-
 	// TODO: imageStore, distributionMetadataStore, and ReferenceStore are only
 	// used above to run migration. They could be initialized in ImageService
 	// if migration is called from daemon/images. layerStore might move as well.
 	if d.UsesSnapshotter() {
 		d.imageService = ctrd.NewService(d.containerdCli)
 	} else {
+		layerStore, err := layer.NewStoreFromOptions(layer.StoreOptions{
+			Root:                      config.Root,
+			MetadataStorePathTemplate: filepath.Join(config.Root, "image", "%s", "layerdb"),
+			GraphDriver:               d.graphDriver,
+			GraphDriverOptions:        config.GraphOptions,
+			IDMapping:                 idMapping,
+			PluginGetter:              d.PluginStore,
+			ExperimentalEnabled:       config.Experimental,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// As layerstore initialization may set the driver
+		d.graphDriver = layerStore.DriverName()
+
+		imageRoot := filepath.Join(config.Root, "image", d.graphDriver)
+		ifs, err := image.NewFSStoreBackend(filepath.Join(imageRoot, "imagedb"))
+		if err != nil {
+			return nil, err
+		}
+
+		// We have a single tag/reference store for the daemon globally. However, it's
+		// stored under the graphdriver. On host platforms which only support a single
+		// container OS, but multiple selectable graphdrivers, this means depending on which
+		// graphdriver is chosen, the global reference store is under there. For
+		// platforms which support multiple container operating systems, this is slightly
+		// more problematic as where does the global ref store get located? Fortunately,
+		// for Windows, which is currently the only daemon supporting multiple container
+		// operating systems, the list of graphdrivers available isn't user configurable.
+		// For backwards compatibility, we just put it under the windowsfilter
+		// directory regardless.
+		refStoreLocation := filepath.Join(imageRoot, `repositories.json`)
+		rs, err := refstore.NewReferenceStore(refStoreLocation)
+		if err != nil {
+			return nil, fmt.Errorf("Couldn't create reference store repository: %s", err)
+		}
+		d.ReferenceStore = rs
+
+		imageStore, err := image.NewImageStore(ifs, layerStore)
+		if err != nil {
+			return nil, err
+		}
+
+		distributionMetadataStore, err := dmetadata.NewFSMetadataStore(filepath.Join(imageRoot, "distribution"))
+		if err != nil {
+			return nil, err
+		}
+
+		imgSvcConfig := images.ImageServiceConfig{
+			ContainerStore:            d.containers,
+			DistributionMetadataStore: distributionMetadataStore,
+			EventsService:             d.EventsService,
+			ImageStore:                imageStore,
+			LayerStore:                layerStore,
+			MaxConcurrentDownloads:    config.MaxConcurrentDownloads,
+			MaxConcurrentUploads:      config.MaxConcurrentUploads,
+			MaxDownloadAttempts:       config.MaxDownloadAttempts,
+			ReferenceStore:            rs,
+			RegistryService:           registryService,
+			ContentNamespace:          config.ContainerdNamespace,
+		}
+
+		// This is a temporary environment variables used in CI to allow pushing
+		// manifest v2 schema 1 images to test-registries used for testing *pulling*
+		// these images.
+		if os.Getenv("DOCKER_ALLOW_SCHEMA1_PUSH_DONOTUSE") != "" {
+			imgSvcConfig.TrustKey, err = loadOrCreateTrustKey(config.TrustKeyPath)
+			if err != nil {
+				return nil, err
+			}
+			if err = system.MkdirAll(filepath.Join(config.Root, "trust"), 0700); err != nil {
+				return nil, err
+			}
+		}
+
+		// containerd is not currently supported with Windows.
+		// So sometimes d.containerdCli will be nil
+		// In that case we'll create a local content store... but otherwise we'll use containerd
+		if d.containerdCli != nil {
+			imgSvcConfig.Leases = d.containerdCli.LeasesService()
+			imgSvcConfig.ContentStore = d.containerdCli.ContentStore()
+		} else {
+			cs, lm, err := d.configureLocalContentStore()
+			if err != nil {
+				return nil, err
+			}
+			imgSvcConfig.ContentStore = cs
+			imgSvcConfig.Leases = lm
+		}
+
 		d.imageService = images.NewImageService(imgSvcConfig)
+
+		logrus.Debugf("Max Concurrent Downloads: %d", imgSvcConfig.MaxConcurrentDownloads)
+		logrus.Debugf("Max Concurrent Uploads: %d", imgSvcConfig.MaxConcurrentUploads)
+		logrus.Debugf("Max Download Attempts: %d", imgSvcConfig.MaxDownloadAttempts)
 	}
-	logrus.Debugf("Max Concurrent Downloads: %d", imgSvcConfig.MaxConcurrentDownloads)
-	logrus.Debugf("Max Concurrent Uploads: %d", imgSvcConfig.MaxConcurrentUploads)
-	logrus.Debugf("Max Download Attempts: %d", imgSvcConfig.MaxDownloadAttempts)
 
 	go d.execCommandGC()
 

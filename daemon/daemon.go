@@ -1090,7 +1090,7 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 	// used above to run migration. They could be initialized in ImageService
 	// if migration is called from daemon/images. layerStore might move as well.
 	if d.UsesSnapshotter() {
-		d.imageService = ctrd.NewService(d.containerdCli)
+		d.imageService = ctrd.NewService(d.containerdCli, d.configStore.ContainerdSnapshotter)
 	} else {
 		d.imageService = images.NewImageService(imgSvcConfig)
 	}

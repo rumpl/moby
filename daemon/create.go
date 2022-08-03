@@ -189,7 +189,8 @@ func (daemon *Daemon) create(ctx context.Context, opts createOpts) (retC *contai
 			return nil, err
 		}
 		parent := identity.ChainID(diffIDs).String()
-		s := daemon.containerdCli.SnapshotService(containerd.DefaultSnapshotter)
+
+		s := daemon.containerdCli.SnapshotService(daemon.configStore.ContainerdSnapshotter)
 		if _, err := s.Prepare(ctx, ctr.ID, parent); err != nil {
 			return nil, err
 		}

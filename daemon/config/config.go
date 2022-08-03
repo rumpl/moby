@@ -51,6 +51,9 @@ const (
 	// DefaultPluginNamespace is the name of the default containerd namespace used for plugins.
 	DefaultPluginNamespace = "plugins.moby"
 
+	// DefaultContainerdSnapshotter is the name of the default containerd snapshotter used for creating container root fs
+	DefaultContainerdSnapshotter = "overlayfs"
+
 	// LinuxV2RuntimeName is the runtime used to specify the containerd v2 runc shim
 	LinuxV2RuntimeName = "io.containerd.runc.v2"
 
@@ -271,6 +274,7 @@ type CommonConfig struct {
 
 	ContainerdNamespace       string `json:"containerd-namespace,omitempty"`
 	ContainerdPluginNamespace string `json:"containerd-plugin-namespace,omitempty"`
+	ContainerdSnapshotter     string `json:"containerd-snapshotter,omitempty"`
 
 	DefaultRuntime string `json:"default-runtime,omitempty"`
 }
@@ -310,6 +314,7 @@ func New() *Config {
 			ContainerdNamespace:       DefaultContainersNamespace,
 			ContainerdPluginNamespace: DefaultPluginNamespace,
 			DefaultRuntime:            StockRuntimeName,
+			ContainerdSnapshotter:     DefaultContainerdSnapshotter,
 		},
 	}
 }

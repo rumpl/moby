@@ -44,13 +44,15 @@ import (
 var shortID = regexp.MustCompile(`^([a-f0-9]{4,64})$`)
 
 type containerdStore struct {
-	client *containerd.Client
-	usage  singleflight.Group
+	client      *containerd.Client
+	usage       singleflight.Group
+	snapshotter string
 }
 
-func NewService(c *containerd.Client) *containerdStore {
+func NewService(c *containerd.Client, snapshotter string) *containerdStore {
 	return &containerdStore{
-		client: c,
+		client:      c,
+		snapshotter: snapshotter,
 	}
 }
 
@@ -98,13 +100,13 @@ func (cs *containerdStore) PullImage(ctx context.Context, image, tag string, pla
 		return err
 	}
 
-	unpacked, err := img.IsUnpacked(ctx, containerd.DefaultSnapshotter)
+	unpacked, err := img.IsUnpacked(ctx, cs.snapshotter)
 	if err != nil {
 		return err
 	}
 
 	if !unpacked {
-		if err := img.Unpack(ctx, containerd.DefaultSnapshotter); err != nil {
+		if err := img.Unpack(ctx, cs.snapshotter); err != nil {
 			return err
 		}
 	}
@@ -124,7 +126,7 @@ func (cs *containerdStore) Images(ctx context.Context, opts types.ImageListOptio
 		return nil, err
 	}
 
-	snapshotter := cs.client.SnapshotService(containerd.DefaultSnapshotter)
+	snapshotter := cs.client.SnapshotService(cs.snapshotter)
 	sizeCache := make(map[digest.Digest]int64)
 	snapshotSizeFn := func(d digest.Digest) (int64, error) {
 		if s, ok := sizeCache[d]; ok {
@@ -426,14 +428,14 @@ func (cs *containerdStore) LoadImage(ctx context.Context, inTar io.ReadCloser, o
 	for _, img := range imgs {
 		platformImg := containerd.NewImageWithPlatform(cs.client, img, platform)
 
-		unpacked, err := platformImg.IsUnpacked(ctx, containerd.DefaultSnapshotter)
+		unpacked, err := platformImg.IsUnpacked(ctx, cs.snapshotter)
 		if err != nil {
 			logrus.WithError(err).WithField("image", img.Name).Error("IsUnpacked failed")
 			continue
 		}
 
 		if !unpacked {
-			err := platformImg.Unpack(ctx, containerd.DefaultSnapshotter)
+			err := platformImg.Unpack(ctx, cs.snapshotter)
 			if err != nil {
 				logrus.WithError(err).WithField("image", img.Name).Error("Failed to unpack image")
 				return errors.Wrapf(err, "Failed to unpack image")
@@ -571,7 +573,7 @@ func (cs *containerdStore) ImageDiskUsage(ctx context.Context) ([]*types.ImageSu
 func (cs *containerdStore) LayerDiskUsage(ctx context.Context) (int64, error) {
 	ch := cs.usage.DoChan("LayerDiskUsage", func() (interface{}, error) {
 		var allLayersSize int64
-		snapshotter := cs.client.SnapshotService(containerd.DefaultSnapshotter)
+		snapshotter := cs.client.SnapshotService(cs.snapshotter)
 		snapshotter.Walk(ctx, func(ctx context.Context, info snapshots.Info) error {
 			usage, err := snapshotter.Usage(ctx, info.Name)
 			if err != nil {
@@ -700,7 +702,7 @@ func (cs *containerdStore) LayerStoreStatus() [][2]string {
 }
 
 func (cs *containerdStore) GetContainerLayerSize(ctx context.Context, containerID string) (int64, int64, error) {
-	snapshotter := cs.client.SnapshotService(containerd.DefaultSnapshotter)
+	snapshotter := cs.client.SnapshotService(cs.snapshotter)
 	sizeCache := make(map[digest.Digest]int64)
 	snapshotSizeFn := func(d digest.Digest) (int64, error) {
 		if s, ok := sizeCache[d]; ok {

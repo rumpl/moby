@@ -369,10 +369,13 @@ COPY --from=containerd    /build/ /usr/local/bin/
 COPY --from=rootlesskit   /build/ /usr/local/bin/
 COPY --from=vpnkit        /build/ /usr/local/bin/
 COPY --from=crun          /build/ /usr/local/bin/
+COPY --from=docker/buildx-bin:0.9.0-rc2 /buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 COPY hack/dockerfile/etc/docker/  /etc/docker/
 ENV PATH=/usr/local/cli:$PATH
 ARG DOCKER_BUILDTAGS
 ENV DOCKER_BUILDTAGS="${DOCKER_BUILDTAGS}"
+ENV CONTAINERD_ADDRESS=/run/docker/containerd/containerd.sock
+ENV CONTAINERD_NAMESPACE=moby
 WORKDIR /go/src/github.com/docker/docker
 VOLUME /var/lib/docker
 VOLUME /home/unprivilegeduser/.local/share/docker

@@ -27,8 +27,10 @@ import (
 	"github.com/moby/buildkit/cache"
 	"github.com/moby/buildkit/cache/metadata"
 	"github.com/moby/buildkit/cache/remotecache"
+	"github.com/moby/buildkit/cache/remotecache/gha"
 	inlineremotecache "github.com/moby/buildkit/cache/remotecache/inline"
 	localremotecache "github.com/moby/buildkit/cache/remotecache/local"
+	registryremotecache "github.com/moby/buildkit/cache/remotecache/registry"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend"
 	dockerfile "github.com/moby/buildkit/frontend/dockerfile/builder"
@@ -122,9 +124,13 @@ func newSnapshotterController(ctx context.Context, rt http.RoundTripper, opt Opt
 		ResolveCacheImporterFuncs: map[string]remotecache.ResolveCacheImporterFunc{
 			"registry": localinlinecache.ResolveCacheImporterFunc(opt.SessionManager, opt.RegistryHosts, wa.ContentStore(), dist.ReferenceStore, dist.ImageStore),
 			"local":    localremotecache.ResolveCacheImporterFunc(opt.SessionManager),
+			"gha":      gha.ResolveCacheImporterFunc(),
 		},
 		ResolveCacheExporterFuncs: map[string]remotecache.ResolveCacheExporterFunc{
-			"inline": inlineremotecache.ResolveCacheExporterFunc(),
+			"registry": registryremotecache.ResolveCacheExporterFunc(opt.SessionManager, opt.RegistryHosts),
+			"inline":   inlineremotecache.ResolveCacheExporterFunc(),
+			"local":    localremotecache.ResolveCacheExporterFunc(opt.SessionManager),
+			"gha":      gha.ResolveCacheExporterFunc(),
 		},
 		Entitlements:   getEntitlements(opt.BuilderConfig),
 		UseSnapshotter: true,

@@ -273,6 +273,7 @@ func (c *Controller) Solve(ctx context.Context, req *controlapi.SolveRequest) (*
 	if err != nil {
 		return nil, err
 	}
+
 	if req.Exporter != "" {
 		var exp exporter.Exporter
 		if c.opt.UseSnapshotter {
@@ -297,6 +298,8 @@ func (c *Controller) Solve(ctx context.Context, req *controlapi.SolveRequest) (*
 
 				req.ExporterAttrs["name"] = strings.Join(names, ",")
 				req.ExporterAttrs["unpack"] = "true"
+			} else {
+				return nil, errors.New("build with containerd snapshotter enabled requires a tag to be set")
 			}
 		} else {
 			exp, err = w.Exporter(req.Exporter, c.opt.SessionManager)

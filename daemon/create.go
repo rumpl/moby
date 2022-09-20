@@ -21,7 +21,6 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/idtools"
-	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/runconfig"
 	"github.com/opencontainers/image-spec/identity"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -134,9 +133,6 @@ func (daemon *Daemon) create(ctx context.Context, opts createOpts) (retC *contai
 			return nil, err
 		}
 		os = img.OperatingSystem()
-		if !system.IsOSSupported(os) {
-			return nil, system.ErrNotSupportedOperatingSystem
-		}
 		imgID = img.ID()
 	} else if isWindows {
 		os = "linux" // 'scratch' case.

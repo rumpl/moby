@@ -107,6 +107,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        worker:
+          - dockerd
+          - containerd
         pkg:
           - ./client
           - ./cmd/buildctl
@@ -136,8 +139,9 @@ jobs:
         name: Checkout BuildKit ${{ env.BUILDKIT_REF }}
         uses: actions/checkout@v3
         with:
-          repository: "moby/buildkit"
-          ref: ${{ env.BUILDKIT_REF }}
+          #repository: "moby/buildkit"
+          repository: "crazy-max/buildkit"
+          ref: "dockerd-test-c8d"
           path: buildkit
       -
         name: Set up QEMU
@@ -152,12 +156,15 @@ jobs:
           name: binary
           path: ./buildkit/build/moby/
       -
-        name: Update daemon.json
+        name: Prepare
         run: |
           sudo rm /etc/docker/daemon.json
           sudo service docker restart
           docker version
           docker info
+          if [ "${{ matrix.worker }}" = "containerd" ]; then
+            echo "TEST_DOCKERD_CONTAINERD_SNAPSHOTTER=1" >> $GITHUB_ENV
+          fi
       -
         name: Test
         run: |
@@ -167,6 +174,6 @@ jobs:
           TEST_DOCKERD: "1"
           TEST_DOCKERD_BINARY: "./build/moby/binary-daemon/dockerd"
           TESTPKGS: "${{ matrix.pkg }}"
-          TESTFLAGS: "-v --parallel=1 --timeout=30m --run=//worker=dockerd$"
+          TESTFLAGS: "-v --parallel=1 --timeout=30m --run=//worker=${{ matrix.worker }}$"
           SKIP_INTEGRATION_TESTS: "${{ matrix.skip-integration-tests }}"
         working-directory: buildkit

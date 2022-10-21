@@ -13,6 +13,7 @@ import (
 	"time"
 
 	containerddefaults "github.com/containerd/containerd/defaults"
+	containerdconfig "github.com/containerd/containerd/services/server/config"
 	"github.com/docker/docker/api"
 	apiserver "github.com/docker/docker/api/server"
 	buildbackend "github.com/docker/docker/api/server/backend/build"
@@ -37,6 +38,7 @@ import (
 	"github.com/docker/docker/daemon"
 	"github.com/docker/docker/daemon/cluster"
 	"github.com/docker/docker/daemon/config"
+	"github.com/docker/docker/daemon/containerd"
 	"github.com/docker/docker/daemon/listeners"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/libcontainerd/supervisor"
@@ -44,6 +46,7 @@ import (
 	"github.com/docker/docker/pkg/authorization"
 	"github.com/docker/docker/pkg/homedir"
 	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/pidfile"
 	"github.com/docker/docker/pkg/plugingetter"
 	"github.com/docker/docker/pkg/sysinfo"
@@ -597,6 +600,46 @@ func (cli *DaemonCli) getContainerdDaemonOpts() ([]supervisor.DaemonOpt, error) 
 		opts = append(opts, supervisor.WithLogLevel("debug"))
 	} else if cli.Config.LogLevel != "" {
 		opts = append(opts, supervisor.WithLogLevel(cli.Config.LogLevel))
+	}
+
+	snapshotterName := containerd.SnapshotterFromGraphDriver(cli.Config.GraphDriver)
+
+	// Default platform snapshotters don't need any extra options
+	switch snapshotterName {
+	case "overlayfs", "native", "windows":
+		snapshotterName = ""
+	}
+
+	if snapshotterName != "" {
+		snapshotterAddr := ""
+		for _, o := range cli.Config.GraphOptions {
+			key, val, err := parsers.ParseKeyValueOpt(o)
+			if err != nil {
+				return nil, err
+			}
+			if key == "address" {
+				snapshotterAddr = val
+				break
+			}
+		}
+
+		if snapshotterAddr == "" {
+			switch snapshotterName {
+			case "stargz":
+				snapshotterAddr = "/run/containerd-stargz-grpc/containerd-stargz-grpc.sock"
+			case "nydus":
+				snapshotterAddr = "/run/containerd-nydus/containerd-nydus-grpc.sock"
+			default:
+				return nil, fmt.Errorf("unknown snapshotter: %s, don't know the default address", snapshotterName)
+			}
+		}
+
+		if snapshotterAddr != "" {
+			opts = append(opts, supervisor.WithProxyPlugin(snapshotterName, containerdconfig.ProxyPlugin{
+				Type:    "snapshot",
+				Address: snapshotterAddr,
+			}))
+		}
 	}
 
 	if !cli.Config.CriContainerd {

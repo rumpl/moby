@@ -45,7 +45,6 @@ func (i *ImageService) Unmount(ctx context.Context, container *container.Contain
 		logrus.WithField("container", container.ID).WithError(err).Error("error unmounting container")
 		return err
 	}
-	container.BaseFS = ""
 
 	return nil
 }

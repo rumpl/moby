@@ -209,8 +209,11 @@ func (b *Builder) Prune(ctx context.Context, opts types.BuildCachePruneOptions) 
 
 // Build executes a build request
 func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.Result, error) {
-	var rc = opt.Source
+	if len(opt.Options.Outputs) > 1 {
+		return nil, errors.Errorf("multiple outputs not supported")
+	}
 
+	var rc = opt.Source
 	if buildID := opt.Options.BuildID; buildID != "" {
 		b.mu.Lock()
 
@@ -340,28 +343,13 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 
 	exporterName := ""
 	exporterAttrs := map[string]string{}
-
-	if b.useSnapshotter {
-		exporterName = client.ExporterImage
-		reposAndTags, err := control.SanitizeRepoAndTags(opt.Options.Tags)
-		if err != nil {
-			return nil, err
-		}
-		names := strings.Join(reposAndTags, ",")
-		// TODO(thaJeztah): these options are ignored (overwritten) if opt.Options.Outputs is set to a "non-cache-only" output.
-		exporterAttrs = map[string]string{
-			"image.name": names,
-			"name":       names,
-		}
-	}
-
-	if len(opt.Options.Outputs) > 1 {
-		return nil, errors.Errorf("multiple outputs not supported")
-	} else if len(opt.Options.Outputs) == 0 {
-		if !b.useSnapshotter {
+	if len(opt.Options.Outputs) == 0 {
+		if b.useSnapshotter {
+			exporterName = client.ExporterImage
+		} else {
 			exporterName = "moby"
 		}
-	} else if len(opt.Options.Outputs) == 1 {
+	} else {
 		// cacheonly is a special type for triggering skipping all exporters
 		if opt.Options.Outputs[0].Type != "cacheonly" {
 			exporterName = opt.Options.Outputs[0].Type
@@ -369,9 +357,15 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 		}
 	}
 
-	if !b.useSnapshotter && exporterName == "moby" {
-		if len(opt.Options.Tags) > 0 {
-			exporterAttrs["name"] = strings.Join(opt.Options.Tags, ",")
+	if (exporterName == client.ExporterImage || exporterName == "moby") && len(opt.Options.Tags) > 0 {
+		reposAndTags, err := control.SanitizeRepoAndTags(opt.Options.Tags)
+		if err != nil {
+			return nil, err
+		}
+		names := strings.Join(reposAndTags, ",")
+		exporterAttrs["name"] = names
+		if b.useSnapshotter {
+			exporterAttrs["image.name"] = names
 		}
 	}
 

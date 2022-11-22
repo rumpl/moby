@@ -100,7 +100,7 @@ func (i *ImageService) CommitImage(ctx context.Context, cc backend.CommitConfig)
 
 	// image create
 	img := images.Image{
-		Name:      danglingImageName(configDigest.Digest()),
+		Name:      configDigest.String(),
 		Target:    commitManifestDesc,
 		CreatedAt: time.Now(),
 	}

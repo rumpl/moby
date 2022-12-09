@@ -17,7 +17,8 @@ import (
 	"github.com/docker/docker/builder/builder-next/adapters/localinlinecache"
 	"github.com/docker/docker/builder/builder-next/adapters/snapshot"
 	mobycontrol "github.com/docker/docker/builder/builder-next/control"
-	containerimageexp "github.com/docker/docker/builder/builder-next/exporter"
+	mobyexporter "github.com/docker/docker/builder/builder-next/exporter"
+	containerimageexp "github.com/docker/docker/builder/builder-next/exporter/containerimage"
 	"github.com/docker/docker/builder/builder-next/imagerefchecker"
 	mobyworker "github.com/docker/docker/builder/builder-next/worker"
 	"github.com/docker/docker/daemon/config"
@@ -271,7 +272,7 @@ func newGraphDriverController(rt http.RoundTripper, opt Opt) (*mobycontrol.Contr
 	}
 
 	wopt := mobyworker.Opt{
-		ID:                "moby",
+		ID:                mobyexporter.Moby,
 		ContentStore:      store,
 		CacheManager:      cm,
 		GCPolicy:          gcPolicy,

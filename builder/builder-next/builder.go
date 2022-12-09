@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/builder"
 	"github.com/docker/docker/builder/builder-next/control"
 	mobycontrol "github.com/docker/docker/builder/builder-next/control"
+	mobyexporter "github.com/docker/docker/builder/builder-next/exporter"
 	"github.com/docker/docker/daemon/config"
 	"github.com/docker/docker/daemon/images"
 	"github.com/docker/docker/libnetwork"
@@ -347,7 +348,7 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 		if b.useSnapshotter {
 			exporterName = client.ExporterImage
 		} else {
-			exporterName = "moby"
+			exporterName = mobyexporter.Moby
 		}
 	} else {
 		// cacheonly is a special type for triggering skipping all exporters
@@ -357,7 +358,7 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 		}
 	}
 
-	if (exporterName == client.ExporterImage || exporterName == "moby") && len(opt.Options.Tags) > 0 {
+	if (exporterName == client.ExporterImage || exporterName == mobyexporter.Moby) && len(opt.Options.Tags) > 0 {
 		reposAndTags, err := control.SanitizeRepoAndTags(opt.Options.Tags)
 		if err != nil {
 			return nil, err
@@ -401,7 +402,7 @@ func (b *Builder) Build(ctx context.Context, opt backend.BuildConfig) (*builder.
 		if err != nil {
 			return err
 		}
-		if exporterName != "moby" {
+		if exporterName != mobyexporter.Moby {
 			return nil
 		}
 		id, ok := resp.ExporterResponse["containerimage.digest"]

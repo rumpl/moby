@@ -10,6 +10,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/bklog"
 
+	mobyexporter "github.com/docker/docker/builder/builder-next/exporter"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	apitypes "github.com/moby/buildkit/api/types"
 	"github.com/moby/buildkit/cache/remotecache"
@@ -276,11 +277,7 @@ func (c *Controller) Solve(ctx context.Context, req *controlapi.SolveRequest) (*
 	if req.Exporter != "" {
 		var exp exporter.Exporter
 		if c.opt.UseSnapshotter {
-			// TODO(thaJeztah): this should be a const: https://github.com/moby/moby/pull/44079#discussion_r1010894271
-			// Should this use [client.ExporterDocker] ? It also looks like we're
-			// using two different approaches; a "wrapped" Worker (ContainerdWorker)
-			// and updating the exporter-name before calling; we should pick one.
-			if req.Exporter == "moby" {
+			if req.Exporter == mobyexporter.Moby {
 				req.Exporter = client.ExporterImage
 			}
 

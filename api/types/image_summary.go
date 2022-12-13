@@ -94,4 +94,7 @@ type ImageSummary struct {
 	//
 	// Required: true
 	VirtualSize int64 `json:"VirtualSize"`
+
+	Architecture string `json:"Architecture"`
+	Os           string `json:"Os"`
 }

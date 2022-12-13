@@ -91,7 +91,7 @@ func (i *ImageService) Images(ctx context.Context, opts types.ImageListOptions) 
 			return nil, err
 		}
 
-		summaries = append(summaries, &types.ImageSummary{
+		summary := &types.ImageSummary{
 			ParentID:    "",
 			ID:          img.Target().Digest.String(),
 			Created:     img.Metadata().CreatedAt.Unix(),
@@ -105,7 +105,13 @@ func (i *ImageService) Images(ctx context.Context, opts types.ImageListOptions) 
 			// consider both "0" and "nil" to be "empty".
 			SharedSize: -1,
 			Containers: -1,
-		})
+		}
+		if img.Target().Platform != nil {
+			summary.Architecture = img.Target().Platform.Architecture
+			summary.Os = img.Target().Platform.OS
+		}
+
+		summaries = append(summaries, summary)
 	}
 
 	if opts.SharedSize {

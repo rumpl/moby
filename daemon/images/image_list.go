@@ -260,8 +260,10 @@ func newImageSummary(image *image.Image, size int64) *types.ImageSummary {
 		// between 0 (default) and "not set". We cannot use a pointer (nil)
 		// for this, as the JSON representation uses "omitempty", which would
 		// consider both "0" and "nil" to be "empty".
-		SharedSize: -1,
-		Containers: -1,
+		SharedSize:   -1,
+		Containers:   -1,
+		Architecture: image.Architecture,
+		Os:           image.OS,
 	}
 	if image.Config != nil {
 		summary.Labels = image.Config.Labels

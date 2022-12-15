@@ -97,10 +97,10 @@ type Builder struct {
 }
 
 // New creates a new builder
-func New(opt Opt) (*Builder, error) {
+func New(ctx context.Context, opt Opt) (*Builder, error) {
 	reqHandler := newReqBodyHandler(tracing.DefaultTransport)
 
-	c, err := newController(reqHandler, opt)
+	c, err := newController(ctx, reqHandler, opt)
 	if err != nil {
 		return nil, err
 	}

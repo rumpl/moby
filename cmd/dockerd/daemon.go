@@ -226,10 +226,14 @@ func (cli *DaemonCli) start(opts *daemonOptions) (err error) {
 
 	logrus.Info("Daemon has completed initialization")
 
-	routerOptions, err := newRouterOptions(cli.Config, d)
+	routerCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	routerOptions, err := newRouterOptions(routerCtx, cli.Config, d)
 	if err != nil {
+		cancel()
 		return err
 	}
+	defer cancel()
+
 	routerOptions.api = cli.api
 	routerOptions.cluster = c
 
@@ -278,7 +282,7 @@ type routerOptions struct {
 	cluster        *cluster.Cluster
 }
 
-func newRouterOptions(config *config.Config, d *daemon.Daemon) (routerOptions, error) {
+func newRouterOptions(ctx context.Context, config *config.Config, d *daemon.Daemon) (routerOptions, error) {
 	opts := routerOptions{}
 	sm, err := session.NewManager()
 	if err != nil {
@@ -296,7 +300,7 @@ func newRouterOptions(config *config.Config, d *daemon.Daemon) (routerOptions, e
 		daemon:         d,
 	}
 
-	bk, err := buildkit.New(buildkit.Opt{
+	bk, err := buildkit.New(ctx, buildkit.Opt{
 		SessionManager:      sm,
 		Root:                filepath.Join(config.Root, "buildkit"),
 		Dist:                d.DistributionServices(),

@@ -49,14 +49,14 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func newController(rt http.RoundTripper, opt Opt) (*mobycontrol.Controller, error) {
+func newController(ctx context.Context, rt http.RoundTripper, opt Opt) (*mobycontrol.Controller, error) {
 	if opt.UseSnapshotter {
-		return newSnapshotterController(rt, opt)
+		return newSnapshotterController(ctx, rt, opt)
 	}
-	return newGraphDriverController(rt, opt)
+	return newGraphDriverController(ctx, rt, opt)
 }
 
-func newSnapshotterController(rt http.RoundTripper, opt Opt) (*mobycontrol.Controller, error) {
+func newSnapshotterController(ctx context.Context, rt http.RoundTripper, opt Opt) (*mobycontrol.Controller, error) {
 	if err := os.MkdirAll(opt.Root, 0711); err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func newSnapshotterController(rt http.RoundTripper, opt Opt) (*mobycontrol.Contr
 	}
 	wo.Executor = exec
 
-	w, err := mobyworker.NewContainerdWorker(context.TODO(), wo)
+	w, err := mobyworker.NewContainerdWorker(ctx, wo)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func newSnapshotterController(rt http.RoundTripper, opt Opt) (*mobycontrol.Contr
 	})
 }
 
-func newGraphDriverController(rt http.RoundTripper, opt Opt) (*mobycontrol.Controller, error) {
+func newGraphDriverController(ctx context.Context, rt http.RoundTripper, opt Opt) (*mobycontrol.Controller, error) {
 	if err := os.MkdirAll(opt.Root, 0711); err != nil {
 		return nil, err
 	}
@@ -263,12 +263,12 @@ func newGraphDriverController(rt http.RoundTripper, opt Opt) (*mobycontrol.Contr
 		return nil, errors.Errorf("snapshotter doesn't support differ")
 	}
 
-	leases, err := lm.List(context.TODO(), "labels.\"buildkit/lease.temporary\"")
+	leases, err := lm.List(ctx, "labels.\"buildkit/lease.temporary\"")
 	if err != nil {
 		return nil, err
 	}
 	for _, l := range leases {
-		lm.Delete(context.TODO(), l)
+		lm.Delete(ctx, l)
 	}
 
 	wopt := mobyworker.Opt{

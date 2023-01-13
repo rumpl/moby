@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"runtime"
 	"time"
@@ -22,12 +21,12 @@ import (
 	"github.com/containerd/containerd/snapshots"
 	"github.com/docker/docker/api/types/backend"
 	containerapi "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/image"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	perrors "github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,7 +46,9 @@ func (i *ImageService) CommitImage(ctx context.Context, cc backend.CommitConfig)
 	}
 	target := baseImg.Target()
 
-	platform := platforms.OnlyStrict(cc.ContainerConfig.Platform)
+	// platform := platforms.OnlyStrict(cc.ContainerConfig.Platform)
+	platform := platforms.Default()
+	fmt.Printf("%#v\n", cc.ContainerConfig.Platform)
 
 	contentStore := baseImg.ContentStore()
 
@@ -309,5 +310,14 @@ func uniquePart() string {
 //
 // This is a temporary shim. Should be removed when builder stops using commit.
 func (i *ImageService) CommitBuildStep(ctx context.Context, c backend.CommitConfig) (image.ID, error) {
-	return "", errdefs.NotImplemented(errors.New("not implemented"))
+	ctr := i.containers.Get(c.ContainerID)
+	if ctr == nil {
+		// TODO: use typed error
+		return "", perrors.Errorf("container not found: %s", c.ContainerID)
+	}
+	c.ContainerMountLabel = ctr.MountLabel
+	c.ContainerOS = ctr.OS
+	c.ParentImageID = string(ctr.ImageID)
+	return i.CommitImage(ctx, c)
+	// return "", errdefs.NotImplemented(errors.New("CommitBuildStep not implemented"))
 }

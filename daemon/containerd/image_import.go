@@ -14,5 +14,5 @@ import (
 // written to outStream. Repository and tag names can optionally be given in
 // the repo and tag arguments, respectively.
 func (i *ImageService) ImportImage(ctx context.Context, src string, repository string, platform *specs.Platform, tag string, msg string, inConfig io.ReadCloser, outStream io.Writer, changes []string) error {
-	return errdefs.NotImplemented(errors.New("not implemented"))
+	return errdefs.NotImplemented(errors.New("ImportImage not implemented"))
 }

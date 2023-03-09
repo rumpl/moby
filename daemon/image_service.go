@@ -54,7 +54,6 @@ type ImageService interface {
 	CreateLayer(container *container.Container, initFunc layer.MountInit) (layer.RWLayer, error)
 	GetLayerByID(cid string) (layer.RWLayer, error)
 	LayerStoreStatus() [][2]string
-	GetLayerMountID(cid string) (string, error)
 	ReleaseLayer(rwlayer layer.RWLayer) error
 	LayerDiskUsage(ctx context.Context) (int64, error)
 	GetContainerLayerSize(ctx context.Context, containerID string) (int64, int64, error)

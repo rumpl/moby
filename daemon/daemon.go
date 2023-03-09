@@ -1215,7 +1215,7 @@ func (daemon *Daemon) Shutdown(ctx context.Context) error {
 				log.WithError(err).Error("failed to shut down container")
 				return
 			}
-			if mountid, err := daemon.imageService.GetLayerMountID(c.ID); err == nil {
+			if mountid, err := daemon.DistributionServices().LayerStore.GetMountID(c.ID); err == nil {
 				daemon.cleanupMountsByID(mountid)
 			}
 			log.Debugf("shut down container")

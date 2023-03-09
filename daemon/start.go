@@ -239,7 +239,7 @@ func (daemon *Daemon) Cleanup(container *container.Container) {
 	if err := daemon.conditionalUnmountOnCleanup(container); err != nil {
 		// FIXME: remove once reference counting for graphdrivers has been refactored
 		// Ensure that all the mounts are gone
-		if mountid, err := daemon.imageService.GetLayerMountID(container.ID); err == nil {
+		if mountid, err := daemon.DistributionServices().LayerStore.GetMountID(container.ID); err == nil {
 			daemon.cleanupMountsByID(mountid)
 		}
 	}

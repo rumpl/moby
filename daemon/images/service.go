@@ -147,13 +147,6 @@ func (i *ImageService) LayerStoreStatus() [][2]string {
 	return i.layerStore.DriverStatus()
 }
 
-// GetLayerMountID returns the mount ID for a layer
-// called from daemon.go Daemon.Shutdown(), and Daemon.Cleanup() (cleanup is actually continerCleanup)
-// TODO: needs to be refactored to Unmount (see callers), or removed and replaced with GetLayerByID
-func (i *ImageService) GetLayerMountID(cid string) (string, error) {
-	return i.layerStore.GetMountID(cid)
-}
-
 // Cleanup resources before the process is shutdown.
 // called from daemon.go Daemon.Shutdown()
 func (i *ImageService) Cleanup() error {

@@ -6,6 +6,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/image"
 )
 
 // ImageDelete deletes the image referenced by the given imageRef from this
@@ -57,6 +58,12 @@ func (i *ImageService) ImageDelete(ctx context.Context, imageRef string, force, 
 	if err != nil {
 		return nil, err
 	}
+
+	img, err := i.GetImage(ctx, imageRef, image.GetImageOpts{})
+	if err != nil {
+		return nil, err
+	}
+	i.LogImageEvent(img.ID().String(), img.ID().String(), "delete")
 
 	return []types.ImageDeleteResponseItem{{Untagged: reference.FamiliarString(parsedRef)}}, nil
 }

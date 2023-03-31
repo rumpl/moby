@@ -73,5 +73,7 @@ func (i *ImageService) TagImage(ctx context.Context, imageID image.ID, newTag re
 		logger.WithError(err).Warn("unexpected error when deleting dangling image")
 	}
 
+	i.LogImageEvent(imageID.String(), reference.FamiliarString(newTag), "tag")
+
 	return nil
 }

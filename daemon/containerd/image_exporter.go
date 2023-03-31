@@ -153,7 +153,9 @@ func (i *ImageService) LoadImage(ctx context.Context, inTar io.ReadCloser, outSt
 		}
 
 		fmt.Fprintf(progress, "Loaded image: %s\n", name)
+		i.LogImageEvent(img.Target.Digest.String(), img.Target.Digest.String(), "load")
 	}
+
 	return nil
 }
 

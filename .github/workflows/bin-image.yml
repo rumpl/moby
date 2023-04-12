@@ -1,0 +1,80 @@
+name: bin-image
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'master'
+      - '[0-9]+.[0-9]+'
+    tags:
+      - 'v*'
+  pull_request:
+
+env:
+  MOBYBIN_REPO_SLUG: moby/moby-bin
+  PLATFORM: Moby Engine
+  PRODUCT: Moby
+  DEFAULT_PRODUCT_LICENSE: Moby
+  PACKAGER_NAME: Moby
+
+jobs:
+  validate-dco:
+    uses: ./.github/workflows/.dco.yml
+
+  build:
+    runs-on: ubuntu-20.04
+    needs:
+      - validate-dco
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      -
+        name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ${{ env.MOBYBIN_REPO_SLUG }}
+          ### versioning strategy
+          ## push semver tag v23.0.0
+          # moby/moby-bin:23.0.0
+          # moby/moby-bin:latest
+          ## push semver prelease tag v23.0.0-beta.1
+          # moby/moby-bin:23.0.0-beta.1
+          ## push on master
+          # moby/moby-bin:master
+          ## push on 23.0 branch
+          # moby/moby-bin:23.0
+          tags: |
+            type=semver,pattern={{version}}
+            type=ref,event=branch
+            type=ref,event=pr
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      -
+        name: Login to DockerHub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_MOBYBIN_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_MOBYBIN_TOKEN }}
+      -
+        name: Build
+        uses: docker/bake-action@v2
+        with:
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.meta.outputs.bake-file }}
+          targets: bin-image-cross
+          push: ${{ github.event_name != 'pull_request' }}

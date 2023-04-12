@@ -6,12 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"runtime"
 	"time"
 
-	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
 	cerrdefs "github.com/containerd/containerd/errdefs"
@@ -22,12 +20,12 @@ import (
 	"github.com/containerd/containerd/snapshots"
 	"github.com/docker/docker/api/types/backend"
 	containerapi "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/image"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	perrors "github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -93,7 +91,7 @@ func (i *ImageService) CommitImage(ctx context.Context, cc backend.CommitConfig)
 	}
 
 	layers := append(ocimanifest.Layers, diffLayerDesc)
-	commitManifestDesc, configDigest, err := writeContentsForImage(ctx, i.snapshotter, baseImg, imageConfig, layers)
+	commitManifestDesc, configDigest, err := writeContentsForImage(ctx, i.snapshotter, baseImg.ContentStore(), imageConfig, layers)
 	if err != nil {
 		return "", err
 	}
@@ -162,7 +160,7 @@ func generateCommitImageConfig(ctx context.Context, container *containerapi.Conf
 }
 
 // writeContentsForImage will commit oci image config and manifest into containerd's content store.
-func writeContentsForImage(ctx context.Context, snName string, baseImg containerd.Image, newConfig ocispec.Image, layers []ocispec.Descriptor) (ocispec.Descriptor, image.ID, error) {
+func writeContentsForImage(ctx context.Context, snName string, cs content.Store, newConfig ocispec.Image, layers []ocispec.Descriptor) (ocispec.Descriptor, image.ID, error) {
 	newConfigJSON, err := json.Marshal(newConfig)
 	if err != nil {
 		return ocispec.Descriptor{}, "", err
@@ -198,8 +196,6 @@ func writeContentsForImage(ctx context.Context, snName string, baseImg container
 		Digest:    digest.FromBytes(newMfstJSON),
 		Size:      int64(len(newMfstJSON)),
 	}
-
-	cs := baseImg.ContentStore()
 
 	// new manifest should reference the layers and config content
 	labels := map[string]string{
@@ -309,5 +305,14 @@ func uniquePart() string {
 //
 // This is a temporary shim. Should be removed when builder stops using commit.
 func (i *ImageService) CommitBuildStep(ctx context.Context, c backend.CommitConfig) (image.ID, error) {
-	return "", errdefs.NotImplemented(errors.New("not implemented"))
+	ctr := i.containers.Get(c.ContainerID)
+	if ctr == nil {
+		// TODO: use typed error
+		return "", perrors.Errorf("container not found: %s", c.ContainerID)
+	}
+	c.ContainerMountLabel = ctr.MountLabel
+	c.ContainerOS = ctr.OS
+	c.ParentImageID = string(ctr.ImageID)
+	c.ContainerConfig.Platform = ctr.Config.Platform
+	return i.CommitImage(ctx, c)
 }

@@ -365,6 +365,7 @@ func newRouterOptions(ctx context.Context, config *config.Config, d *daemon.Daem
 		Snapshotter:         d.ImageService().StorageDriver(),
 		ContainerdAddress:   config.ContainerdAddr,
 		ContainerdNamespace: config.ContainerdNamespace,
+		Client:              d.ContainerdClient(),
 	})
 	if err != nil {
 		return opts, err

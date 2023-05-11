@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/docker/docker/api/types"
@@ -92,6 +93,7 @@ type Opt struct {
 	Snapshotter         string
 	ContainerdAddress   string
 	ContainerdNamespace string
+	Client              *containerd.Client
 }
 
 // Builder can build using BuildKit backend

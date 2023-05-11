@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/containerd/containerd"
 	contentapi "github.com/containerd/containerd/api/services/content/v1"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/leases"
@@ -61,6 +62,7 @@ type Opt struct {
 	LeaseManager              leases.Manager
 	ContentStore              content.Store
 	HistoryConfig             *config.HistoryConfig
+	Client                    *containerd.Client
 }
 
 type Controller struct { // TODO: ControlService
@@ -127,7 +129,8 @@ func (c *Controller) Register(server *grpc.Server) {
 	c.gatewayForwarder.Register(server)
 	tracev1.RegisterTraceServiceServer(server, c)
 
-	store := &roContentStore{c.opt.ContentStore}
+	store, _ := newRoContentStore(c.opt.ContentStore, "test", c.opt.Client)
+	// store := &roContentStore{Store: c.opt.ContentStore, leaseID: "test", client: c.opt.Client}
 	contentapi.RegisterContentServer(server, contentserver.New(store))
 }
 
@@ -646,10 +649,28 @@ func cacheOptKey(opt controlapi.CacheOptionsEntry) (string, error) {
 
 type roContentStore struct {
 	content.Store
+	leaseID string
+}
+
+func newRoContentStore(store content.Store, lid string, client *containerd.Client) (content.Store, error) {
+	ls := client.LeasesService()
+
+	opts := []leases.Opt{
+		leases.WithID(lid),
+	}
+
+	_, _ = ls.Create(context.TODO(), opts...)
+
+	ro := roContentStore{
+		Store:   store,
+		leaseID: lid,
+	}
+	return &ro, nil
 }
 
 func (cs *roContentStore) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
-	return nil, errors.Errorf("read-only content store")
+	ctx = leases.WithLease(ctx, cs.leaseID)
+	return cs.Store.Writer(ctx, opts...)
 }
 
 func (cs *roContentStore) Delete(ctx context.Context, dgst digest.Digest) error {
@@ -657,11 +678,13 @@ func (cs *roContentStore) Delete(ctx context.Context, dgst digest.Digest) error 
 }
 
 func (cs *roContentStore) Update(ctx context.Context, info content.Info, fieldpaths ...string) (content.Info, error) {
-	return content.Info{}, errors.Errorf("read-only content store")
+	return cs.Store.Update(ctx, info, fieldpaths...)
+	// return content.Info{}, errors.Errorf("read-only content store")
 }
 
 func (cs *roContentStore) Abort(ctx context.Context, ref string) error {
-	return errors.Errorf("read-only content store")
+	return cs.Store.Abort(ctx, ref)
+	// return errors.Errorf("read-only content store")
 }
 
 const timestampKey = "buildkit-current-timestamp"

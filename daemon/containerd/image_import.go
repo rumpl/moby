@@ -143,7 +143,7 @@ func (i *ImageService) ImportImage(ctx context.Context, ref reference.Named, pla
 		logger.WithError(err).Debug("failed to save image")
 		return "", err
 	}
-	err = i.unpackImage(ctx, img, *platform)
+	err = i.unpackImage(ctx, img)
 	if err != nil {
 		logger.WithError(err).Debug("failed to unpack image")
 	} else {
@@ -307,8 +307,9 @@ func (i *ImageService) saveImage(ctx context.Context, img images.Image) error {
 }
 
 // unpackImage unpacks the image into the snapshotter.
-func (i *ImageService) unpackImage(ctx context.Context, img images.Image, platform ocispec.Platform) error {
-	c8dImg := containerd.NewImageWithPlatform(i.client, img, platforms.Only(platform))
+func (i *ImageService) unpackImage(ctx context.Context, img images.Image) error {
+	c8dImg := containerd.NewImage(i.client, img)
+	// c8dImg := containerd.NewImageWithPlatform(i.client, img, platforms.Only(platform))
 	unpacked, err := c8dImg.IsUnpacked(ctx, i.snapshotter)
 	if err != nil {
 		return err

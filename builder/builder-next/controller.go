@@ -140,6 +140,7 @@ func newSnapshotterController(ctx context.Context, rt http.RoundTripper, opt Opt
 		HistoryConfig: historyConf,
 		LeaseManager:  wo.LeaseManager,
 		ContentStore:  wo.ContentStore,
+		Client:        opt.Client,
 	})
 }
 

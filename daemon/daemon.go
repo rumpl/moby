@@ -1471,6 +1471,10 @@ func (daemon *Daemon) ImageService() ImageService {
 	return daemon.imageService
 }
 
+func (daemon *Daemon) ContainerdClient() *containerd.Client {
+	return daemon.containerdCli
+}
+
 // ImageBackend returns an image-backend for Swarm and the distribution router.
 func (daemon *Daemon) ImageBackend() executorpkg.ImageBackend {
 	return &imageBackend{

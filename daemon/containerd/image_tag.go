@@ -8,6 +8,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/image"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -16,7 +17,16 @@ import (
 func (i *ImageService) TagImage(ctx context.Context, imageID image.ID, newTag reference.Named) error {
 	target, err := i.resolveDescriptor(ctx, imageID.String())
 	if err != nil {
-		return errors.Wrapf(err, "failed to resolve image id %q to a descriptor", imageID.String())
+		var des v1.Descriptor
+		if err := readConfig(ctx, i.client.ContentStore(), v1.Descriptor{Digest: imageID.Digest()}, &des); err != nil {
+			return err
+		}
+
+		target = v1.Descriptor{
+			Digest:    imageID.Digest(),
+			Size:      1,
+			MediaType: des.MediaType,
+		}
 	}
 
 	newImg := containerdimages.Image{
@@ -26,6 +36,8 @@ func (i *ImageService) TagImage(ctx context.Context, imageID image.ID, newTag re
 
 	is := i.client.ImageService()
 	_, err = is.Create(ctx, newImg)
+	_ = i.unpackImage(ctx, newImg)
+
 	if err != nil {
 		if !cerrdefs.IsAlreadyExists(err) {
 			return errdefs.System(errors.Wrapf(err, "failed to create image with name %s and target %s", newImg.Name, newImg.Target.Digest.String()))

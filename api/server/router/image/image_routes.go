@@ -24,6 +24,7 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/streamformatter"
+	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -395,12 +396,16 @@ func (ir *imageRouter) postImagesTag(ctx context.Context, w http.ResponseWriter,
 		return errdefs.InvalidParameter(err)
 	}
 
+	var imageID image.ID
 	img, err := ir.backend.GetImage(ctx, vars["name"], opts.GetImageOpts{})
 	if err != nil {
-		return errdefs.NotFound(err)
+		// return errdefs.NotFound(err)
+		imageID = image.ID(digest.Digest(vars["name"]))
+	} else {
+		imageID = img.ID()
 	}
 
-	if err := ir.backend.TagImage(ctx, img.ID(), ref); err != nil {
+	if err := ir.backend.TagImage(ctx, imageID, ref); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusCreated)

@@ -1,4 +1,4 @@
-name: test
+name: snapshotter test
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,7 +16,8 @@ on:
 
 jobs:
   test:
+    if: contains(github.event.pull_request.labels.*.name, 'containerd-integration')
     uses: ./.github/workflows/.test.yml
     with:
-      use_snapshotter: false
-      graph_driver: overlay2
+      use_snapshotter: true
+      graph_driver: overlayfs

@@ -1,0 +1,22 @@
+name: snapshotter-windows-2022
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "master"
+      - "[0-9]+.[0-9]+"
+  pull_request:
+
+jobs:
+  run:
+    if: contains(github.event.pull_request.labels.*.name, 'containerd-integration')
+    uses: ./.github/workflows/.windows.yml
+    with:
+      os: windows-2022
+      send_coverage: true
+      use_snapshotter: true

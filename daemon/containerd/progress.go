@@ -134,7 +134,7 @@ func (p pullProgress) UpdateProgress(ctx context.Context, ongoing *jobs, out pro
 		if info, ok := pulling[key]; ok {
 			out.WriteProgress(progress.Progress{
 				ID:      stringid.TruncateID(j.Digest.Encoded()),
-				Action:  "Downloading",
+				Action:  "Pulling fs layer",
 				Current: info.Offset,
 				Total:   info.Total,
 			})

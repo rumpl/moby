@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/pkg/snapshotters"
+	transferimage "github.com/containerd/containerd/pkg/transfer/image"
+	"github.com/containerd/containerd/pkg/transfer/registry"
 	"github.com/containerd/containerd/platforms"
-	"github.com/containerd/containerd/remotes/docker"
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	"github.com/distribution/reference"
@@ -25,7 +25,6 @@ import (
 	"github.com/docker/docker/pkg/streamformatter"
 	"github.com/docker/docker/pkg/stringid"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/pkg/errors"
 )
 
 // PullImage initiates a pull operation. baseRef is the image to pull.
@@ -100,7 +99,7 @@ func (i *ImageService) pullTag(ctx context.Context, ref reference.Named, platfor
 	pp := pullProgress{store: i.content, showExists: true}
 	finishProgress := jobs.showProgress(ctx, out, pp)
 
-	var outNewImg *containerd.Image
+	var outNewImg *images.Image
 	defer func() {
 		finishProgress()
 
@@ -115,8 +114,8 @@ func (i *ImageService) pullTag(ctx context.Context, ref reference.Named, platfor
 		// docker.io/library/hello-world:latest
 		if outNewImg != nil {
 			img := *outNewImg
-			progress.Message(out, "", "Digest: "+img.Target().Digest.String())
-			writeStatus(out, reference.FamiliarString(ref), old.Digest != img.Target().Digest)
+			progress.Message(out, "", "Digest: "+img.Target.Digest.String())
+			writeStatus(out, reference.FamiliarString(ref), old.Digest != img.Target.Digest)
 		}
 	}()
 
@@ -174,27 +173,41 @@ func (i *ImageService) pullTag(ctx context.Context, ref reference.Named, platfor
 	// by converting them to OCI manifests.
 	opts = append(opts, containerd.WithSchema1Conversion) //nolint:staticcheck // Ignore SA1019: containerd.WithSchema1Conversion is deprecated: use Schema 2 or OCI images.
 
-	img, err := i.client.Pull(ctx, ref.String(), opts...)
+	src := registry.NewOCIRegistry(ref.String(), nil, nil)
+	dst := transferimage.NewStore(
+		ref.String(),
+		transferimage.WithPlatforms(platforms.DefaultSpec()),
+		transferimage.WithUnpack(platforms.DefaultSpec(), i.snapshotter),
+	)
+	err = i.client.Transfer(ctx, src, dst)
 	if err != nil {
-		if errors.Is(err, docker.ErrInvalidAuthorization) {
-			// Match error returned by containerd.
-			// https://github.com/containerd/containerd/blob/v1.7.8/remotes/docker/authorizer.go#L189-L191
-			if strings.Contains(err.Error(), "no basic auth credentials") {
-				return err
-			}
-			return errdefs.NotFound(fmt.Errorf("pull access denied for %s, repository does not exist or may require 'docker login'", reference.FamiliarName(ref)))
-		}
 		return err
 	}
+	img, err := i.resolveImage(ctx, ref.String())
+	if err != nil {
+		return err
+	}
+	// img, err := i.client.Pull(ctx, ref.String(), opts...)
+	// if err != nil {
+	// 	if errors.Is(err, docker.ErrInvalidAuthorization) {
+	// 		// Match error returned by containerd.
+	// 		// https://github.com/containerd/containerd/blob/v1.7.8/remotes/docker/authorizer.go#L189-L191
+	// 		if strings.Contains(err.Error(), "no basic auth credentials") {
+	// 			return err
+	// 		}
+	// 		return errdefs.NotFound(fmt.Errorf("pull access denied for %s, repository does not exist or may require 'docker login'", reference.FamiliarName(ref)))
+	// 	}
+	// 	return err
+	// }
 
 	logger := log.G(ctx).WithFields(log.Fields{
-		"digest": img.Target().Digest,
+		"digest": img.Target.Digest,
 		"remote": ref.String(),
 	})
 	logger.Info("image pulled")
 
 	// The pull succeeded, so try to remove any dangling image we have for this target
-	err = i.images.Delete(context.WithoutCancel(ctx), danglingImageName(img.Target().Digest))
+	err = i.images.Delete(context.WithoutCancel(ctx), danglingImageName(img.Target.Digest))
 	if err != nil && !cerrdefs.IsNotFound(err) {
 		// Image pull succeeded, but cleaning up the dangling image failed. Ignore the
 		// error to not mark the pull as failed.
